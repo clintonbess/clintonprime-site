@@ -20,6 +20,9 @@ export default defineConfig({
     },
   },
   plugins: [react(), tailwindcss()],
+  define: {
+    __DEFINES__: "{}",
+  },
   build: {
     outDir: "dist",
   },
