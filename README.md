@@ -2,6 +2,8 @@
 
 A small mono-style project with:
 
+Live site: [clintonprime.com](https://clintonprime.com)
+
 - `libs/api`: Node/Express API with Spotify integration and local media serving
 - `apps/web`: Vite + React frontend styled with a Monokai-inspired theme
 
@@ -80,6 +82,17 @@ pnpm build
 # output in apps/web/dist
 ```
 
+Deploy static frontend to your Nginx web root:
+
+```bash
+cd apps/web
+sudo rm -rf /var/www/html/clintonprime/*
+sudo cp -r dist/* /var/www/html/clintonprime/
+sudo chown -R www-data:www-data /var/www/html/clintonprime
+sudo nginx -t
+sudo systemctl reload nginx
+```
+
 ## API endpoints (subset)
 
 - `GET /api/spotify/recent` – last 5 recently played tracks
@@ -105,6 +118,8 @@ Two simple approaches:
 - Serve the frontend at `https://yourdomain.com`
 - Reverse-proxy `/api/*` and `/media/*` to the API service (e.g., `http://127.0.0.1:3000`)
 - No frontend code changes needed; relative paths continue to work
+
+Note: You already implemented this reverse-proxy. For new deployments, rebuild the frontend and run the commands above to publish the new files, then reload Nginx.
 
 Example Nginx server block:
 
@@ -167,3 +182,81 @@ Serve the frontend as static files from `apps/web/dist` behind your reverse prox
 - 400 on Spotify endpoints after deploy: complete `/api/spotify/login` once to seed tokens.
 - Check that `SPOTIFY_REDIRECT_URI` in `.env` exactly matches your Spotify app settings.
 - Ensure `.env` is readable and writable by the API process if persisting tokens to file.
+
+completed /etc/nginx/sites-available/clintonprime
+
+##
+
+# clintonprime.com – nginx reverse-proxy + static frontend + SSL
+
+##
+
+# --- Redirect all HTTP to HTTPS -------------------------------------------
+
+server {
+listen 80;
+listen [::]:80;
+server_name clintonprime.com www.clintonprime.com;
+
+    location /.well-known/acme-challenge/ { root /var/www/html/clintonprime; }
+    location / { return 301 https://$host$request_uri; }
+
+}
+
+# --- Main HTTPS server -----------------------------------------------------
+
+server {
+server_name clintonprime.com www.clintonprime.com;
+
+root /var/www/html/clintonprime;
+index index.html;
+
+location / {
+try_files $uri $uri/ /index.html;
+}
+
+# BACKEND API PROXY
+
+location /api/ {
+proxy_pass http://localhost:3000/api/;
+proxy_http_version 1.1;
+proxy_set_header Host $host;
+proxy_set_header X-Real-IP $remote_addr;
+proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+}
+
+# Media proxy (mirrors your Vite config)
+
+location /media/ {
+proxy_pass http://localhost:3000/media/;
+proxy_http_version 1.1;
+proxy_set_header Host $host;
+proxy_set_header X-Real-IP $remote_addr;
+proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+}
+
+    listen 443 ssl; # managed by Certbot
+    ssl_certificate /etc/letsencrypt/live/clintonprime.com/fullchain.pem; # managed by Certbot
+    ssl_certificate_key /etc/letsencrypt/live/clintonprime.com/privkey.pem; # managed by Certbot
+    include /etc/letsencrypt/options-ssl-nginx.conf; # managed by Certbot
+    ssl_dhparam /etc/letsencrypt/ssl-dhparams.pem; # managed by Certbot
+
+}
+server {
+if ($host = www.clintonprime.com) {
+        return 301 https://$host$request_uri;
+} # managed by Certbot
+
+    if ($host = clintonprime.com) {
+        return 301 https://$host$request_uri;
+    } # managed by Certbot
+
+listen 80;
+server_name clintonprime.com www.clintonprime.com;
+return 404; # managed by Certbot
+}
+
+any time the site-avaible configuration is modified verify the syntax is correct and reload nginx
+
+sudo nginx -t
+sudo systemctl reload nginx

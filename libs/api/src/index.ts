@@ -12,7 +12,8 @@ const app = express();
 
 app.use(morgan("dev"));
 
-const mediaDir = path.join(__dirname, "../public/media");
+const mediaDir = path.join(__dirname, "../../public/media");
+console.log("mediaDir", mediaDir);
 app.use(
   "/media",
   express.static(mediaDir, {

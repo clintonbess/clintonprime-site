@@ -3,6 +3,12 @@ import querystring from "querystring";
 import SpotifyWebApi from "spotify-web-api-node";
 import axios from "axios";
 import { resolveEnvPath } from "../utils/env-path.js";
+import {
+  getAccessToken,
+  getRefreshToken,
+  setTokens,
+  refreshAccessTokenNow,
+} from "../services/spotify-refresh.js";
 
 const router = express.Router();
 
@@ -72,13 +78,10 @@ router.get("/callback", async (req: Request, res: Response) => {
     );
 
     const { access_token, refresh_token, expires_in } = tokenRes.data;
-    if (refresh_token) {
-      spotifyApi.setRefreshToken(refresh_token);
-      saveRefreshToken(refresh_token);
-    }
-    if (access_token) {
-      spotifyApi.setAccessToken(access_token);
-      saveEnvVar("SPOTIFY_ACCESS_TOKEN", access_token);
+    if (refresh_token || access_token) {
+      setTokens({ accessToken: access_token, refreshToken: refresh_token });
+      if (refresh_token) spotifyApi.setRefreshToken(refresh_token);
+      if (access_token) spotifyApi.setAccessToken(access_token);
     }
 
     // You can either respond with JSON or redirect back to your app
@@ -188,7 +191,7 @@ async function ensureSpotifyAuth(
   next: NextFunction
 ) {
   try {
-    const refreshToken = readEnvVar("SPOTIFY_REFRESH_TOKEN");
+    const refreshToken = getRefreshToken();
     if (!refreshToken) {
       return res.status(400).json({
         error:
@@ -199,21 +202,17 @@ async function ensureSpotifyAuth(
     // Always set the latest refresh token on the client
     spotifyApi.setRefreshToken(refreshToken);
 
-    let accessToken = readEnvVar("SPOTIFY_ACCESS_TOKEN");
+    let accessToken = getAccessToken();
     if (!accessToken) {
-      // Refresh access token using refresh token
-      const data = await spotifyApi.refreshAccessToken();
-      accessToken = data.body.access_token;
+      await refreshAccessTokenNow();
+      accessToken = getAccessToken();
       if (!accessToken) {
         return res
           .status(500)
           .json({ error: "Failed to refresh access token" });
       }
-      spotifyApi.setAccessToken(accessToken);
-      saveEnvVar("SPOTIFY_ACCESS_TOKEN", accessToken);
-    } else {
-      spotifyApi.setAccessToken(accessToken);
     }
+    spotifyApi.setAccessToken(accessToken);
 
     return next();
   } catch (err: any) {
@@ -228,56 +227,4 @@ async function ensureSpotifyAuth(
   }
 }
 
-function saveRefreshToken(token: string) {
-  try {
-    let env = fs.readFileSync(envPath, "utf8");
-    env = env.replace(
-      /SPOTIFY_REFRESH_TOKEN=.*/g,
-      `SPOTIFY_REFRESH_TOKEN=${token}`
-    );
-    fs.writeFileSync(envPath, env);
-    console.log("Saved new refresh token to .env");
-  } catch (err) {
-    console.warn("Could not persist refresh token:", err);
-  }
-}
-
-function saveEnvVar(key: string, value: string) {
-  try {
-    let env = fs.readFileSync(envPath, "utf8");
-
-    // If the key already exists, replace it. Otherwise append.
-    if (env.includes(`${key}=`)) {
-      env = env.replace(new RegExp(`${key}=.*`, "g"), `${key}=${value}`);
-    } else {
-      env += `\n${key}=${value}`;
-    }
-
-    fs.writeFileSync(envPath, env);
-    console.log(`Saved ${key} to .env`);
-  } catch (err) {
-    console.warn(`Could not persist ${key}:`, err);
-  }
-}
-
-export function saveTokens({
-  accessToken,
-  refreshToken,
-}: {
-  accessToken?: string;
-  refreshToken?: string;
-}) {
-  if (accessToken) saveEnvVar("SPOTIFY_ACCESS_TOKEN", accessToken);
-  if (refreshToken) saveEnvVar("SPOTIFY_REFRESH_TOKEN", refreshToken);
-}
-
-function readEnvVar(key: string): string | undefined {
-  try {
-    const env = fs.readFileSync(envPath, "utf8");
-    const line = env.split("\n").find((l) => l.startsWith(`${key}=`));
-    return line ? line.split("=")[1].trim() : undefined;
-  } catch (err) {
-    console.warn("Could not read .env:", err);
-    return undefined;
-  }
-}
+// Removed local env read/write helpers in favor of spotify-refresh service
