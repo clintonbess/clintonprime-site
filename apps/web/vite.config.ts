@@ -29,6 +29,8 @@ export default defineConfig({
     __VITE_PLUGINS__: "[]",
     __VITE_BUILD_INFO__: "{}",
     __SERVER__: "false",
+    __SERVER_HOST__: '"localhost"',
+    __SERVER_PORT__: '"3000"',
     __VITE_BASE_URL__: '"/"',
     __VITE_APP_ENV__: '"development"',
     __VITE_APP_NAME__: '"clintonprime-site"',
