@@ -29,6 +29,7 @@ export default defineConfig({
     __HMR_HOSTNAME__: '"localhost"',
     __HMR_BASE__: '"/"',
     __HMR_DIRECT_TARGET__: '"ws://localhost:5173/"',
+    __HMR_ENABLE_OVERLAY__: "false",
     __HMR_TIMEOUT__: '"10000"',
     __WS_TOKEN__: '"ws"',
     __BASE__: '"/"',
