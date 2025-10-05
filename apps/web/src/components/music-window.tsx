@@ -1,6 +1,6 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { PrimeWindow } from "./prime-window";
-import { FaPlay, FaPause, FaMusic, FaAtom, FaCode } from "react-icons/fa";
+import { FaPlay } from "react-icons/fa";
 type SpotifyTrack = {
   id: string;
   name: string;
@@ -28,9 +28,6 @@ export function MusicWindow({
   const [tab, setTab] = useState<"spotify" | "local">("spotify");
   const [spotifyTracks, setSpotifyTracks] = useState<SpotifyTrack[]>([]);
   const [localTracks, setLocalTracks] = useState<LocalTrack[]>([]);
-  const [playingTrack, setPlayingTrack] = useState<LocalTrack | null>(null);
-
-  const audioRef = useRef<HTMLAudioElement | null>(null);
 
   // Load Spotify Recents
   useEffect(() => {
@@ -65,34 +62,6 @@ export function MusicWindow({
     }
     loadLocal();
   }, []);
-
-  // Handle play/pause on the single player
-  const handlePlay = (track: LocalTrack) => {
-    if (!audioRef.current) return;
-
-    // If same track → toggle pause/play
-    if (playingTrack?.id === track.id) {
-      if (!audioRef.current.paused) {
-        audioRef.current.pause();
-        setPlayingTrack(null);
-      } else {
-        audioRef.current.play();
-      }
-      return;
-    }
-
-    // Load new track
-    audioRef.current.src = track.url;
-    audioRef.current.play();
-    setPlayingTrack(track);
-  };
-
-  const formatTime = (sec: number) => {
-    if (!sec) return "0:00";
-    const m = Math.floor(sec / 60);
-    const s = Math.floor(sec % 60);
-    return `${m}:${s.toString().padStart(2, "0")}`;
-  };
 
   return (
     <PrimeWindow
