@@ -22,6 +22,7 @@ export default defineConfig({
   plugins: [react(), tailwindcss()],
   define: {
     __DEFINES__: "{}",
+    __HMR_CONFIG_NAME__: '""',
   },
   build: {
     outDir: "dist",
