@@ -4,13 +4,15 @@ import spotifyRouter from "./routes/spotify-router.js";
 import musicRouter from "./routes/music-router.js";
 import { loadDotenvFromNearest } from "./utils/env-path.js";
 import path from "path";
+import { __dirname } from "./utils/env-path.js";
+
 loadDotenvFromNearest();
 
 const app = express();
 
 app.use(morgan("dev"));
 
-const mediaDir = path.join(__dirname, "../public/media");
+const mediaDir = path.join(__dirname, "../../public/media");
 app.use(
   "/media",
   express.static(mediaDir, {

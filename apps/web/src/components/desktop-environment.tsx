@@ -8,6 +8,7 @@ import {
   faFileLines,
   faPlay,
   faPause,
+  faHeadphones,
 } from "@fortawesome/free-solid-svg-icons";
 import { QuantumWindow } from "./quantum-window";
 import { ProgrammingWindow } from "./programming-window";
@@ -108,6 +109,7 @@ export function MusicPlayerDock({ currentTrack }: { currentTrack: any }) {
         </>
       ) : (
         <div className="text-monokai-magenta text-xs text-center py-2">
+          <FontAwesomeIcon icon={faMusic} className="mr-2" />
           Select a track to begin
         </div>
       )}
