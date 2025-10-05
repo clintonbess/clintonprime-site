@@ -1,68 +1,356 @@
-:root {
-  font-family: system-ui, Avenir, Helvetica, Arial, sans-serif;
-  line-height: 1.5;
+@import "tailwindcss";
+/* @plugin "tailwindcss-animate" */
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
+
+@font-face {
+  font-family: "JetBrains Mono";
+  src: url("/fonts/jetbrains-mono/JetBrainsMono-Variable.woff2") format("woff2");
+  font-weight: 100 800; /* full range */
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "JetBrains Mono";
+  src: url("/fonts/jetbrains-mono/JetBrainsMono-Variable.woff2") format("woff2");
+  font-weight: 100 800;
+  font-style: italic;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "JetBrains Mono";
+  src: url("/fonts/jetbrains-mono/JetBrainsMono-Regular.woff2") format("woff2");
   font-weight: 400;
-
-  color-scheme: light dark;
-  color: rgba(255, 255, 255, 0.87);
-  background-color: #242424;
-
-  font-synthesis: none;
-  text-rendering: optimizeLegibility;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "JetBrains Mono";
+  src: url("/fonts/jetbrains-mono/JetBrainsMono-Italic.woff2") format("woff2");
+  font-weight: 400;
+  font-style: italic;
+  font-display: swap;
+}
+@font-face {
+  font-family: "JetBrains Mono";
+  src: url("/fonts/jetbrains-mono/JetBrainsMono-Bold.woff2") format("woff2");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
 }
 
-a {
-  font-weight: 500;
-  color: #646cff;
-  text-decoration: inherit;
+/* Monokai Palette Reference */
+@theme {
+  /* Base Backgrounds */
+  --color-monokai-bg0: #272822; /* Primary background */
+  --color-monokai-bg1: #3e3d32; /* Panels, sidebars */
+  --color-monokai-bg2: #43443b; /* Hover/selection highlight */
+  --color-monokai-bg3: #1e1f1c; /* Ultra-dark cards/modals */
+
+  /* Foregrounds */
+  --color-monokai-fg0: #f8f8f2; /* Main text */
+  --color-monokai-fg1: #cfcfc2; /* Secondary text */
+  --color-monokai-fg2: #75715e; /* Muted text */
+  --color-monokai-fg3: #a1a191; /* Disabled/subtle */
+
+  /* Syntax / Accents */
+  --color-monokai-green: #a6e22e;
+  --color-monokai-cyan: #66d9ef;
+  --color-monokai-orange: #fd971f;
+  --color-monokai-pink: #f92672;
+  --color-monokai-purple: #ae81ff;
+  --color-monokai-yellow: #e6db74;
+  --color-monokai-red: #f92672;
+  --color-monokai-magenta: #fd5ff0;
+  --color-monokai-violet: #ae81ff;
+  --color-monokai-blue: #66d9ef;
+
+  /* UI Surfaces */
+  --color-monokai-card: #3a3c35;
+  --color-monokai-border: #4b4d44;
+  --color-monokai-sidebar: #2d2e27;
+
+  /* Aliases */
+  --color-monokai-bg: var(--color-monokai-bg0);
+  --color-monokai-darker: var(--color-monokai-bg3);
+  --color-monokai-text: var(--color-monokai-fg0);
+  --color-monokai-accent: var(--color-monokai-blue);
+
+  --color-sublime-footer: #585858;
 }
-a:hover {
-  color: #535bf2;
+
+.monokai-card {
+  background-color: var(--color-monokai-card);
+}
+.monokai-border {
+  border-color: var(--color-monokai-border);
+}
+.monokai-dark {
+  background-color: var(--color-monokai-bg);
+  color: var(--color-monokai-text);
+}
+.accent-cyan {
+  color: var(--color-monokai-accent);
 }
 
 body {
-  margin: 0;
-  display: flex;
-  place-items: center;
-  min-width: 320px;
-  min-height: 100vh;
+  @apply bg-monokai-bg text-monokai-text;
 }
 
-h1 {
-  font-size: 3.2em;
-  line-height: 1.1;
+@theme inline {
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
 }
 
-button {
-  border-radius: 8px;
-  border: 1px solid transparent;
-  padding: 0.6em 1.2em;
-  font-size: 1em;
-  font-weight: 500;
-  font-family: inherit;
-  background-color: #1a1a1a;
-  cursor: pointer;
-  transition: border-color 0.25s;
-}
-button:hover {
-  border-color: #646cff;
-}
-button:focus,
-button:focus-visible {
-  outline: 4px auto -webkit-focus-ring-color;
+/* Map shadcn tokens → Monokai */
+:root {
+  --background: oklch(0.2692 0.0127 113.8546);
+  --foreground: oklch(0.9219 0 0);
+  --card: oklch(0.3091 0.0109 122.0619);
+  --card-foreground: oklch(0.9219 0 0);
+  --popover: oklch(0.2686 0 0);
+  --popover-foreground: oklch(0.9219 0 0);
+  --primary: #a6e22e;
+  --primary-foreground: oklch(0 0 0);
+  --secondary: oklch(0.2686 0 0);
+  --secondary-foreground: oklch(0.984 0.003 247.858);
+  --muted: oklch(0.297 0.011 122.0909);
+  --muted-foreground: oklch(0.9461 0 0);
+  --accent: oklch(0.7668 0.1683 62.3737);
+  --accent-foreground: oklch(0.987 0.026 102.212);
+  --destructive: oklch(0.596 0.2263 30.0262);
+  --destructive-foreground: oklch(1 0 0);
+  --border: oklch(0.3715 0 0);
+  --input: oklch(0.3715 0 0);
+  --ring: oklch(0.5818 0.2625 297.4004);
+  --chart-1: oklch(0.8048 0.1639 91.4479);
+  --chart-2: oklch(0.6009 0.1291 69.4091);
+  --chart-3: oklch(0.4276 0.0985 55.2855);
+  --chart-4: oklch(0.5014 0.116 58.5511);
+  --chart-5: oklch(0.4276 0.0985 55.2855);
+  --sidebar: oklch(0.3178 0.0171 107.3369);
+  --sidebar-foreground: oklch(0.9219 0 0);
+  --sidebar-primary: oklch(0.6931 0.1416 80.6403);
+  --sidebar-primary-foreground: oklch(1 0 0);
+  --sidebar-accent: oklch(0.6416 0.24 7.4666);
+  --sidebar-accent-foreground: oklch(0.984 0.003 247.858);
+  --sidebar-border: var(--color-monokai-violet);
+  --sidebar-ring: oklch(0.8269 0.108 211.9627);
+  --font-sans: JetBrains Mono, ui-monospace, monospace;
+  --font-serif: Courier New, monospace;
+  --font-mono: Courier New, monospace;
+
+  --radius: 0.3rem;
+  --shadow-2xs: 0px 4px 8px 6.5px hsl(0 0% 10.1961% / 0.05);
+  --shadow-xs: 0px 4px 8px 6.5px hsl(0 0% 10.1961% / 0.05);
+  --shadow-sm: 0px 4px 8px 6.5px hsl(0 0% 10.1961% / 0.1),
+    0px 1px 2px 5.5px hsl(0 0% 10.1961% / 0.1);
+  --shadow: 0px 4px 8px 6.5px hsla(0, 14%, 15%, 0.1),
+    0px 1px 2px 5.5px hsl(0 0% 10.1961% / 0.1);
+  --shadow-md: 0px 4px 8px 6.5px hsl(0 0% 10.1961% / 0.1),
+    0px 2px 4px 5.5px hsl(0 0% 10.1961% / 0.1);
+  --shadow-lg: 0px 4px 8px 6.5px hsl(0 0% 10.1961% / 0.1),
+    0px 4px 6px 5.5px hsl(0 0% 10.1961% / 0.1);
+  --shadow-xl: 0px 4px 8px 6.5px hsl(0 0% 10.1961% / 0.1),
+    0px 8px 10px 5.5px hsl(0 0% 10.1961% / 0.1);
+  --shadow-2xl: 0px 4px 8px 6.5px hsl(0 0% 10.1961% / 0.25);
+
+  /* Gradients */
+  --gradient-primary: linear-gradient(
+    to right,
+    var(--color-monokai-green),
+    var(--color-monokai-cyan)
+  );
 }
 
-@media (prefers-color-scheme: light) {
+@layer base {
   :root {
-    color: #213547;
-    background-color: #ffffff;
+    --sidebar: oklch(0.985 0 0);
+    --sidebar-foreground: oklch(0.145 0 0);
+    --sidebar-primary: oklch(0.205 0 0);
+    --sidebar-primary-foreground: oklch(0.985 0 0);
+    --sidebar-accent: oklch(0.97 0 0);
+    --sidebar-accent-foreground: oklch(0.205 0 0);
+    --sidebar-border: oklch(0.922 0 0);
+    --sidebar-ring: oklch(0.708 0 0);
   }
-  a:hover {
-    color: #747bff;
+
+  .dark {
+    --sidebar: oklch(0.205 0 0);
+    --sidebar-foreground: oklch(0.985 0 0);
+    --sidebar-primary: oklch(0.488 0.243 264.376);
+    --sidebar-primary-foreground: oklch(0.985 0 0);
+    --sidebar-accent: oklch(0.269 0 0);
+    --sidebar-accent-foreground: oklch(0.985 0 0);
+    --sidebar-border: oklch(1 0 0 / 10%);
+    --sidebar-ring: oklch(0.439 0 0);
   }
-  button {
-    background-color: #f9f9f9;
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
   }
+  body {
+    @apply bg-background text-foreground;
+  }
+}
+
+@keyframes fadeOut {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+    visibility: hidden;
+  }
+}
+
+.fade-out {
+  animation: fadeOut 0.8s ease-out 3.2s forwards;
+}
+
+/* === Sublime / Monokai Syntax Highlighting === */
+
+/* Core syntax colors */
+.syntax-keyword,
+.terminal-blue {
+  color: var(--color-monokai-cyan);
+}
+
+.syntax-function,
+.terminal-green {
+  color: var(--color-monokai-green);
+}
+
+.syntax-string,
+.terminal-orange {
+  color: var(--color-monokai-orange);
+}
+
+.syntax-constant,
+.terminal-yellow {
+  color: var(--color-monokai-yellow);
+}
+
+.syntax-class,
+.syntax-type,
+.terminal-purple {
+  color: var(--color-monokai-purple);
+}
+
+.syntax-variable,
+.terminal-pink {
+  color: var(--color-monokai-pink);
+}
+
+.syntax-comment,
+.text-monokai-comment {
+  color: var(--color-monokai-fg2);
+  font-style: italic;
+}
+
+.syntax-number {
+  color: var(--color-monokai-magenta);
+}
+
+.syntax-operator {
+  color: var(--color-monokai-blue);
+}
+
+.syntax-parameter {
+  color: var(--color-monokai-yellow);
+}
+
+/* Subtle glow for active tokens */
+.syntax-glow {
+  text-shadow: 0 0 6px rgba(166, 226, 46, 0.2),
+    0 0 12px rgba(102, 217, 239, 0.15);
+}
+
+/* Inline blocks for highlighting */
+.code-line {
+  display: block;
+  font-family: "JetBrains Mono", monospace;
+  line-height: 1.5;
+  white-space: pre;
+}
+
+/* Background for code panels */
+.code-editor {
+  background-color: var(--color-monokai-bg1);
+  border: 1px solid var(--color-monokai-border);
+  border-radius: 0.5rem;
+  padding: 1rem;
+  box-shadow: 0 0 20px rgba(0, 0, 0, 0.4) inset;
+}
+
+/* Selection/hover states similar to Sublime */
+.syntax-selected {
+  background-color: rgba(102, 217, 239, 0.15);
+  border-radius: 0.25rem;
+}
+
+@keyframes float {
+  0%,
+  100% {
+    transform: translateY(0px) rotate(0deg);
+  }
+  33% {
+    transform: translateY(-6px) rotate(0.4deg);
+  }
+  66% {
+    transform: translateY(3px) rotate(-0.4deg);
+  }
+}
+
+@keyframes glow {
+  0%,
+  100% {
+    box-shadow: 0 0 5px rgba(102, 217, 239, 0.3),
+      0 0 10px rgba(166, 226, 46, 0.2), 0 0 15px rgba(249, 38, 114, 0.1);
+  }
+  50% {
+    box-shadow: 0 0 10px rgba(166, 226, 46, 0.4),
+      0 0 20px rgba(102, 217, 239, 0.3), 0 0 30px rgba(174, 129, 255, 0.2);
+  }
+}
+
+.glow-accent {
+  animation: glow 2s ease-in-out infinite alternate;
 }

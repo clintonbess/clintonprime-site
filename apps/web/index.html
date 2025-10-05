@@ -1,10 +1,29 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>web</title>
+    <title>clintonprime OS</title>
+
+    <!-- 🪩 Custom Favicon -->
+    <link rel="icon" type="image/png" href="/assets/favicon.ico" />
+
+    <!-- Optional: Monokai-style theme colors -->
+    <meta name="theme-color" content="#272822" />
+    <meta
+      name="description"
+      content="clintonprime OS — Quantum Creativity Suite"
+    />
+
+    <!-- Vite + React refresh -->
+    <script type="module">
+      import { injectIntoGlobalHook } from "/@react-refresh";
+      injectIntoGlobalHook(window);
+      window.$RefreshReg$ = () => {};
+      window.$RefreshSig$ = () => (type) => type;
+    </script>
+
+    <script type="module" src="/@vite/client"></script>
   </head>
   <body>
     <div id="root"></div>
