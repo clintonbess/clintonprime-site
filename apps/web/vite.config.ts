@@ -23,6 +23,10 @@ export default defineConfig({
   define: {
     __DEFINES__: "{}",
     __HMR_CONFIG_NAME__: '""',
+    __BASE__: '"/"',
+    __VITE_PRELOAD_EXCLUDE__: "[]",
+    __VITE_PUBLIC_PATH__: '"/"',
+    __VITE_PLUGINS__: "[]",
   },
   build: {
     outDir: "dist",
