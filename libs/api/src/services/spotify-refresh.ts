@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 import dotenv from "dotenv";
 import { resolveEnvPath } from "../utils/env-path.js";
 const envPath: string = resolveEnvPath(process.cwd()) || "./.env";
@@ -6,11 +5,6 @@ dotenv.config({ path: envPath });
 
 import axios from "axios";
 import fs from "fs";
-=======
-import axios from "axios";
-import fs from "fs";
-import { resolveEnvPath } from "../utils/env-path.js";
->>>>>>> cfbf5047bf681a195c99389761ae97d2fff52792
 
 const CLIENT_ID = process.env.SPOTIFY_CLIENT_ID;
 const CLIENT_SECRET = process.env.SPOTIFY_CLIENT_SECRET;
@@ -18,11 +12,6 @@ const CLIENT_SECRET = process.env.SPOTIFY_CLIENT_SECRET;
 let refreshToken: string | null = process.env.SPOTIFY_REFRESH_TOKEN || null;
 let accessToken: string | null = process.env.SPOTIFY_ACCESS_TOKEN || null;
 
-<<<<<<< HEAD
-=======
-const envPath: string = resolveEnvPath(process.cwd()) || "./.env";
-
->>>>>>> cfbf5047bf681a195c99389761ae97d2fff52792
 function saveEnvVar(key: string, value: string) {
   try {
     let env = fs.readFileSync(envPath, "utf8");
