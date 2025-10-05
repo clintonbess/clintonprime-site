@@ -165,17 +165,33 @@ server {
 - After DNS propagates, issue certs (e.g., Certbot for Nginx or use Caddy)
 - Update your server block to listen on 443 and redirect HTTP → HTTPS
 
-### System service
+### System service (PM2)
 
-Run the API with a process manager (PM2/systemd):
+Run the API with PM2 and enable restart on reboot:
 
 ```bash
+# Install PM2 (once)
+sudo npm install -g pm2
+pm2 -v
+
+# Build and start API
 cd libs/api
 pnpm build
 pm2 start dist/index.js --name clintonprime-api
+
+# Verify status
+pm2 ls
+
+# Enable startup on boot (follow the printed command)
+pm2 startup systemd
+pm2 save
+
+# Useful
+pm2 restart clintonprime-api   # restart after deploying new build
+pm2 logs clintonprime-api --lines 100
 ```
 
-Serve the frontend as static files from `apps/web/dist` behind your reverse proxy.
+Serve the frontend as static files from `apps/web/dist` behind your reverse proxy (see deploy section above for Nginx).
 
 ## Troubleshooting
 
@@ -183,80 +199,67 @@ Serve the frontend as static files from `apps/web/dist` behind your reverse prox
 - Check that `SPOTIFY_REDIRECT_URI` in `.env` exactly matches your Spotify app settings.
 - Ensure `.env` is readable and writable by the API process if persisting tokens to file.
 
-completed /etc/nginx/sites-available/clintonprime
+### Example Nginx site config (/etc/nginx/sites-available/clintonprime)
 
-##
+```nginx
+# Redirect all HTTP to HTTPS
+server {
+  listen 80;
+  listen [::]:80;
+  server_name clintonprime.com www.clintonprime.com;
 
-# clintonprime.com – nginx reverse-proxy + static frontend + SSL
+  location /.well-known/acme-challenge/ { root /var/www/html/clintonprime; }
+  location / { return 301 https://$host$request_uri; }
+}
 
-##
+# Main HTTPS server
+server {
+  server_name clintonprime.com www.clintonprime.com;
 
-# --- Redirect all HTTP to HTTPS -------------------------------------------
+  root /var/www/html/clintonprime;
+  index index.html;
+
+  location / {
+    try_files $uri $uri/ /index.html;
+  }
+
+  # Backend API proxy
+  location /api/ {
+    proxy_pass http://localhost:3000/api/;
+    proxy_http_version 1.1;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+  }
+
+  # Media proxy
+  location /media/ {
+    proxy_pass http://localhost:3000/media/;
+    proxy_http_version 1.1;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+  }
+
+  listen 443 ssl; # managed by Certbot
+  ssl_certificate /etc/letsencrypt/live/clintonprime.com/fullchain.pem; # managed by Certbot
+  ssl_certificate_key /etc/letsencrypt/live/clintonprime.com/privkey.pem; # managed by Certbot
+  include /etc/letsencrypt/options-ssl-nginx.conf; # managed by Certbot
+  ssl_dhparam /etc/letsencrypt/ssl-dhparams.pem; # managed by Certbot
+}
 
 server {
-listen 80;
-listen [::]:80;
-server_name clintonprime.com www.clintonprime.com;
-
-    location /.well-known/acme-challenge/ { root /var/www/html/clintonprime; }
-    location / { return 301 https://$host$request_uri; }
-
+  if ($host = www.clintonprime.com) { return 301 https://$host$request_uri; }
+  if ($host = clintonprime.com) { return 301 https://$host$request_uri; }
+  listen 80;
+  server_name clintonprime.com www.clintonprime.com;
+  return 404; # managed by Certbot
 }
+```
 
-# --- Main HTTPS server -----------------------------------------------------
+Validate and reload Nginx after changes:
 
-server {
-server_name clintonprime.com www.clintonprime.com;
-
-root /var/www/html/clintonprime;
-index index.html;
-
-location / {
-try_files $uri $uri/ /index.html;
-}
-
-# BACKEND API PROXY
-
-location /api/ {
-proxy_pass http://localhost:3000/api/;
-proxy_http_version 1.1;
-proxy_set_header Host $host;
-proxy_set_header X-Real-IP $remote_addr;
-proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-}
-
-# Media proxy (mirrors your Vite config)
-
-location /media/ {
-proxy_pass http://localhost:3000/media/;
-proxy_http_version 1.1;
-proxy_set_header Host $host;
-proxy_set_header X-Real-IP $remote_addr;
-proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-}
-
-    listen 443 ssl; # managed by Certbot
-    ssl_certificate /etc/letsencrypt/live/clintonprime.com/fullchain.pem; # managed by Certbot
-    ssl_certificate_key /etc/letsencrypt/live/clintonprime.com/privkey.pem; # managed by Certbot
-    include /etc/letsencrypt/options-ssl-nginx.conf; # managed by Certbot
-    ssl_dhparam /etc/letsencrypt/ssl-dhparams.pem; # managed by Certbot
-
-}
-server {
-if ($host = www.clintonprime.com) {
-        return 301 https://$host$request_uri;
-} # managed by Certbot
-
-    if ($host = clintonprime.com) {
-        return 301 https://$host$request_uri;
-    } # managed by Certbot
-
-listen 80;
-server_name clintonprime.com www.clintonprime.com;
-return 404; # managed by Certbot
-}
-
-any time the site-avaible configuration is modified verify the syntax is correct and reload nginx
-
+```bash
 sudo nginx -t
 sudo systemctl reload nginx
+```
