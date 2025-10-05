@@ -1,6 +1,10 @@
 import path from "path";
 import fs from "fs";
 import dotenv from "dotenv";
+import { fileURLToPath } from "url";
+
+const __filename = fileURLToPath(import.meta.url);
+export const __dirname = path.dirname(__filename);
 
 /**
  * Resolve absolute path to a .env file by walking up from a starting directory.

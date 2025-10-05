@@ -2,6 +2,7 @@ import express from "express";
 import fs from "fs";
 import path from "path";
 import { parseFile } from "music-metadata";
+import { __dirname } from "../utils/env-path.js";
 
 const router = express.Router();
 const mediaDir = path.join(__dirname, "../../public/media");
