@@ -19,7 +19,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      # 2️⃣ Setup Node (cache pnpm) + enable Corepack
+      # 2️⃣ Node + pnpm (via Corepack; npm fallback)
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
@@ -30,8 +30,11 @@ jobs:
             apps/**/pnpm-lock.yaml
             libs/**/pnpm-lock.yaml
 
-      - name: Enable Corepack
-        run: corepack enable
+      - name: Ensure pnpm (Corepack)
+        run: |
+          corepack enable
+          corepack prepare pnpm@9 --activate || npm i -g pnpm@9
+          pnpm -v
 
       # 3️⃣ Build Frontend
       - name: Build Web
@@ -110,8 +113,11 @@ jobs:
             git fetch --all --tags
             git checkout -f ${{ github.sha }}
 
-            cd libs/api
+            # Ensure pnpm on server
             corepack enable || true
+            corepack prepare pnpm@9 --activate || npm i -g pnpm@9
+
+            cd libs/api
             pnpm install --frozen-lockfile
             pnpm build
 
