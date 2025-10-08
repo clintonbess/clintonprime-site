@@ -19,7 +19,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      # 2️⃣ Node + pnpm (via Corepack; npm fallback)
+      # 2️⃣ Node + pnpm (pnpm via action reads packageManager)
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
@@ -30,11 +30,13 @@ jobs:
             apps/**/pnpm-lock.yaml
             libs/**/pnpm-lock.yaml
 
-      - name: Ensure pnpm (Corepack)
-        run: |
-          corepack enable
-          corepack prepare pnpm@9 --activate || npm i -g pnpm@9
-          pnpm -v
+      - name: Setup pnpm (use repo packageManager)
+        uses: pnpm/action-setup@v4
+        with:
+          run_install: false
+
+      - name: pnpm version
+        run: pnpm -v
 
       # 3️⃣ Build Frontend
       - name: Build Web
@@ -83,7 +85,7 @@ jobs:
             cat > $API_REPO_DIR/libs/api/.env << 'EOF'
             NODE_ENV=production
             PORT=3000
-            PUBLIC_BASE_URL=${{ secrets.PUBLIC_BASE_URL_DEV || 'https://dev.clintonprime.com' }}
+            PUBLIC_BASE_URL=https://dev.clintonprime.com
 
             SESSION_SECRET=${{ secrets.SESSION_SECRET_DEV }}
 
@@ -113,9 +115,12 @@ jobs:
             git fetch --all --tags
             git checkout -f ${{ github.sha }}
 
-            # Ensure pnpm on server
-            corepack enable || true
-            corepack prepare pnpm@9 --activate || npm i -g pnpm@9
+            # Ensure pnpm is installed on the server
+            if ! command -v pnpm >/dev/null 2>&1; then
+              corepack enable || true
+              corepack prepare pnpm@9 --activate || npm i -g pnpm@9
+            fi
+            pnpm -v
 
             cd libs/api
             pnpm install --frozen-lockfile
