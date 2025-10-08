@@ -19,16 +19,19 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      # 2️⃣ Setup Node + pnpm
+      # 2️⃣ Setup Node (cache pnpm) + enable Corepack
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
           node-version: 20
+          cache: pnpm
+          cache-dependency-path: |
+            pnpm-lock.yaml
+            apps/**/pnpm-lock.yaml
+            libs/**/pnpm-lock.yaml
 
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v4
-        with:
-          version: 9
+      - name: Enable Corepack
+        run: corepack enable
 
       # 3️⃣ Build Frontend
       - name: Build Web
@@ -77,13 +80,13 @@ jobs:
             cat > $API_REPO_DIR/libs/api/.env << 'EOF'
             NODE_ENV=production
             PORT=3000
-            PUBLIC_BASE_URL=${{ secrets.PUBLIC_BASE_URL_DEV || 'http://dev.clintonprime.com' }}
+            PUBLIC_BASE_URL=${{ secrets.PUBLIC_BASE_URL_DEV || 'https://dev.clintonprime.com' }}
 
             SESSION_SECRET=${{ secrets.SESSION_SECRET_DEV }}
 
             SPOTIFY_CLIENT_ID=${{ secrets.SPOTIFY_CLIENT_ID_DEV }}
             SPOTIFY_CLIENT_SECRET=${{ secrets.SPOTIFY_CLIENT_SECRET_DEV }}
-            SPOTIFY_REDIRECT_URI=http://dev.clintonprime.com/api/spotify/callback
+            SPOTIFY_REDIRECT_URI=https://dev.clintonprime.com/api/spotify/callback
 
             SPOTIFY_REFRESH_TOKEN=${{ secrets.SPOTIFY_REFRESH_TOKEN_DEV }}
             SPOTIFY_ACCESS_TOKEN=${{ secrets.SPOTIFY_ACCESS_TOKEN_DEV || '' }}
@@ -112,6 +115,5 @@ jobs:
             pnpm install --frozen-lockfile
             pnpm build
 
-            # Restart PM2
             pm2 describe $PM2_NAME >/dev/null 2>&1 && pm2 restart $PM2_NAME || pm2 start dist/index.js --name $PM2_NAME
             pm2 save
