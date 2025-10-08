@@ -19,7 +19,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      # 2️⃣ Node + pnpm (pnpm via action reads packageManager)
+      # 2️⃣ Node + pnpm (ensure pnpm is on PATH)
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
@@ -30,14 +30,25 @@ jobs:
             apps/**/pnpm-lock.yaml
             libs/**/pnpm-lock.yaml
 
-      - name: Setup pnpm (use repo packageManager)
-        uses: pnpm/action-setup@v4
-        with:
-          version: 9
-          run_install: false
+      - name: Install pnpm and add to PATH
+        shell: bash
+        run: |
+          # Corepack route (preferred)
+          corepack enable
+          # Explicit PNPM_HOME so the shim dir is on PATH across steps
+          echo "PNPM_HOME=$HOME/.local/share/pnpm" >> $GITHUB_ENV
+          echo "$HOME/.local/share/pnpm" >> $GITHUB_PATH
+          # Activate a known pnpm version (or read from packageManager)
+          corepack prepare pnpm@9 --activate || true
 
-      - name: pnpm version
-        run: pnpm -v
+          # Fallback: global install if corepack ever flakes
+          if ! command -v pnpm >/dev/null 2>&1; then
+            npm i -g pnpm@9
+            echo "$(npm prefix -g)/bin" >> $GITHUB_PATH
+          fi
+
+          pnpm -v
+          which pnpm
 
       # 3️⃣ Build Frontend
       - name: Build Web
@@ -116,12 +127,13 @@ jobs:
             git fetch --all --tags
             git checkout -f ${{ github.sha }}
 
-            # Ensure pnpm is installed on the server
-            if ! command -v pnpm >/dev/null 2>&1; then
-              corepack enable || true
-              corepack prepare pnpm@9 --activate || npm i -g pnpm@9
-            fi
-            pnpm -v
+            # Ensure pnpm exists on the server and is on PATH
+            corepack enable || true
+            echo "PNPM_HOME=$HOME/.local/share/pnpm" >> $HOME/.profile
+            export PNPM_HOME=$HOME/.local/share/pnpm
+            export PATH="$PNPM_HOME:$PATH"
+            corepack prepare pnpm@9 --activate || npm i -g pnpm@9
+            pnpm -v || { echo "pnpm missing" >&2; exit 1; }
 
             cd libs/api
             pnpm install --frozen-lockfile
