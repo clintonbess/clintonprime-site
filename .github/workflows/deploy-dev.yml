@@ -1,0 +1,92 @@
+name: Deploy (Dev)
+on:
+  push:
+    branches: [dev]
+  workflow_dispatch:
+
+env:
+  WEB_ROOT: /var/www/html/clintonprime
+  API_REPO_DIR: /opt/clintonprime-site
+  PM2_NAME: clintonprime-api-dev
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      # 1️⃣ Checkout
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # 2️⃣ Setup Node + pnpm
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      # 3️⃣ Build Frontend
+      - name: Build Web
+        working-directory: apps/web
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm build
+
+      # 4️⃣ Package Frontend
+      - name: Package Web
+        run: tar -C apps/web -czf web-dist.tar.gz dist
+
+      # 5️⃣ Copy Frontend to Server
+      - name: Upload Web
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.LIGHTSAIL_HOST_DEV }}
+          username: ${{ secrets.LIGHTSAIL_USER_DEV }}
+          key: ${{ secrets.LIGHTSAIL_SSH_KEY_DEV }}
+          source: web-dist.tar.gz
+          target: /tmp/
+
+      # 6️⃣ Deploy Frontend on Server
+      - name: Deploy Web
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.LIGHTSAIL_HOST_DEV }}
+          username: ${{ secrets.LIGHTSAIL_USER_DEV }}
+          key: ${{ secrets.LIGHTSAIL_SSH_KEY_DEV }}
+          script: |
+            sudo mkdir -p $WEB_ROOT
+            sudo rm -rf $WEB_ROOT/*
+            sudo tar -xzf /tmp/web-dist.tar.gz -C $WEB_ROOT --strip-components=1
+            sudo chown -R www-data:www-data $WEB_ROOT
+            sudo nginx -t && sudo systemctl reload nginx
+
+      # 7️⃣ Deploy API (git pull + build + pm2 restart)
+      - name: Deploy API
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.LIGHTSAIL_HOST_DEV }}
+          username: ${{ secrets.LIGHTSAIL_USER_DEV }}
+          key: ${{ secrets.LIGHTSAIL_SSH_KEY_DEV }}
+          script: |
+            if [ ! -d "$API_REPO_DIR/.git" ]; then
+              sudo mkdir -p $API_REPO_DIR
+              sudo chown -R $USER:$USER $API_REPO_DIR
+              git clone https://github.com/${{ github.repository }} $API_REPO_DIR
+            fi
+
+            cd $API_REPO_DIR
+            git fetch --all --tags
+            git checkout -f ${{ github.sha }}
+
+            cd libs/api
+            corepack enable || true
+            pnpm install --frozen-lockfile
+            pnpm build
+
+            # Restart PM2
+            pm2 describe $PM2_NAME >/dev/null 2>&1 && pm2 restart $PM2_NAME || pm2 start dist/index.js --name $PM2_NAME
+            pm2 save
