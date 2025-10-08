@@ -33,6 +33,7 @@ jobs:
       - name: Setup pnpm (use repo packageManager)
         uses: pnpm/action-setup@v4
         with:
+          version: 9
           run_install: false
 
       - name: pnpm version
