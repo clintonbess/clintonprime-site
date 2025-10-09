@@ -59,7 +59,7 @@ jobs:
         run: |
           ls -lh web-dist.tar.gz api-bundle.tar.gz
 
-      # ---------- UPLOAD ----------
+      # ---------- UPLOAD -----------
       - name: Upload bundles to server
         uses: appleboy/scp-action@v1
         with:
