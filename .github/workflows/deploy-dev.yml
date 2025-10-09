@@ -9,12 +9,9 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  # --- app paths / proc name ---
   WEB_ROOT: /var/www/html/clintonprime
   CURRENT_API: /opt/clintonprime-site/current-api
   PM2_NAME: clintonprime-api-dev
-
-  # --- bootstrap vars ---
   DOMAIN: dev.clintonprime.com
   EMAIL: clintonbess3@gmail.com
   DEPLOY_USER: ubuntu
@@ -97,7 +94,6 @@ jobs:
           script: |
             set -euo pipefail
             MARKER="/opt/clintonprime-site/.bootstrapped"
-
             if [ -f "$MARKER" ]; then
               echo "[bootstrap] already bootstrapped, skipping."
               exit 0
@@ -109,7 +105,6 @@ jobs:
             set -euo pipefail
             export DEBIAN_FRONTEND=noninteractive
 
-            # ---------- config (env-overridable) ----------
             DOMAIN="${DOMAIN:-dev.clintonprime.com}"
             EMAIL="${EMAIL:-clintonbess3@gmail.com}"
             DEPLOY_USER="${DEPLOY_USER:-ubuntu}"
@@ -117,7 +112,6 @@ jobs:
             RELEASES_DIR="${RELEASES_DIR:-/opt/clintonprime-site/releases}"
             CURRENT_API="${CURRENT_API:-/opt/clintonprime-site/current-api}"
             PM2_NAME="${PM2_NAME:-clintonprime-api-dev}"
-            # ---------------------------------------------
 
             echo "[1/6] apt & base packages"
             sudo apt-get update -y
@@ -135,7 +129,7 @@ jobs:
             sudo chown -R "$DEPLOY_USER":"$DEPLOY_USER" "$(dirname "$RELEASES_DIR")" "$RELEASES_DIR" "$(dirname "$CURRENT_API")" || true
 
             echo "[4/6] nginx site (HTTP first, ACME allowed)"
-            sudo tee /etc/nginx/sites-available/clintonprime-dev >/dev/null <<NGX
+            cat > /tmp/clintonprime-dev.tmpl <<'NGX'
             server {
               listen 80;
               listen [::]:80;
@@ -148,26 +142,26 @@ jobs:
               index index.html;
 
               # SPA
-              location / { try_files \$uri \$uri/ /index.html; }
+              location / { try_files $uri $uri/ /index.html; }
 
               # API proxy
               location /api/ {
                 proxy_pass http://localhost:3000/api/;
                 proxy_http_version 1.1;
-                proxy_set_header Host \$host;
-                proxy_set_header X-Real-IP \$remote_addr;
-                proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
-                proxy_set_header X-Forwarded-Proto \$scheme;
+                proxy_set_header Host $host;
+                proxy_set_header X-Real-IP $remote_addr;
+                proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+                proxy_set_header X-Forwarded-Proto $scheme;
               }
 
               # Media proxy
               location /media/ {
                 proxy_pass http://localhost:3000/media/;
                 proxy_http_version 1.1;
-                proxy_set_header Host \$host;
-                proxy_set_header X-Real-IP \$remote_addr;
-                proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
-                proxy_set_header X-Forwarded-Proto \$scheme;
+                proxy_set_header Host $host;
+                proxy_set_header X-Real-IP $remote_addr;
+                proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+                proxy_set_header X-Forwarded-Proto $scheme;
               }
 
               add_header X-Frame-Options "SAMEORIGIN";
@@ -176,6 +170,9 @@ jobs:
               add_header X-XSS-Protection "1; mode=block";
             }
             NGX
+
+            # substitute only DOMAIN and WEB_ROOT to avoid touching $uri/$host/etc.
+            sudo sh -c "envsubst '\${DOMAIN} \${WEB_ROOT}' < /tmp/clintonprime-dev.tmpl > /etc/nginx/sites-available/clintonprime-dev"
 
             sudo ln -sf /etc/nginx/sites-available/clintonprime-dev /etc/nginx/sites-enabled/clintonprime-dev
             [ -e /etc/nginx/sites-enabled/default ] && sudo rm -f /etc/nginx/sites-enabled/default || true
@@ -189,15 +186,10 @@ jobs:
             sudo apt-get install -y certbot python3-certbot-nginx
             sudo certbot --nginx -d "${DOMAIN}" --non-interactive --agree-tos -m "${EMAIL}" --redirect || true
             sudo nginx -t && sudo systemctl reload nginx || true
-
             sudo ufw allow 'Nginx Full' || true
-
-            echo "Bootstrap complete."
             BOOT
 
             chmod +x /tmp/bootstrap-dev.sh
-
-            echo "[bootstrap] exporting variables and running script"
             DOMAIN="${{ env.DOMAIN }}" \
             EMAIL="${{ env.EMAIL }}" \
             DEPLOY_USER="${{ env.DEPLOY_USER }}" \
@@ -211,7 +203,7 @@ jobs:
             echo "$(date -Iseconds) bootstrapped" | sudo tee "$MARKER" >/dev/null
             echo "[bootstrap] marker created: $MARKER"
 
-      # ---------- DEPLOY ----------
+      # ---------- DEPLOY (unchanged from before) ----------
       - name: Deploy to server and start PM2 (MVP)
         uses: appleboy/ssh-action@v1.2.0
         with:
@@ -231,55 +223,36 @@ jobs:
             NODE_ENV=production
             export PORT NODE_ENV
 
-            echo "[server] prepare workdir: $WORK"
-            rm -rf "$WORK"
-            mkdir -p "$WORK/web" "$WORK/api"
-
-            echo "[server] unpacking artifacts"
+            rm -rf "$WORK"; mkdir -p "$WORK/web" "$WORK/api"
             tar -xzf /tmp/web-dist.tar.gz -C "$WORK/web"
             tar -xzf /tmp/api-runtime.tar.gz -C "$WORK/api"
             rm -f /tmp/web-dist.tar.gz /tmp/api-runtime.tar.gz
 
-            echo "[server] ensure tools"
             sudo apt-get update -y
             sudo apt-get install -y rsync curl
-            if ! command -v pm2 >/dev/null 2>&1; then
-              sudo npm i -g pm2
-            fi
+            command -v pm2 >/dev/null 2>&1 || sudo npm i -g pm2
             export PATH="$(npm config get prefix 2>/dev/null)/bin:/usr/local/bin:$PATH"
 
-            echo "[server] deploy web -> $WEB_ROOT"
             sudo mkdir -p "$WEB_ROOT"
             sudo rsync -a --delete "$WORK/web/dist/" "$WEB_ROOT/"
             sudo chown -R www-data:www-data "$WEB_ROOT"
-            if command -v nginx >/dev/null 2>&1; then
-              sudo nginx -t && sudo systemctl reload nginx || true
-            fi
+            command -v nginx >/dev/null 2>&1 && sudo nginx -t && sudo systemctl reload nginx || true
 
-            echo "[server] stash existing .env if present"
             PRESERVE_ENV="$WORK/.env.keep"
-            if [ -f "$CURRENT_API/.env" ]; then
-              sudo cp "$CURRENT_API/.env" "$PRESERVE_ENV"
-              echo "[server] stashed .env"
-            fi
+            [ -f "$CURRENT_API/.env" ] && sudo cp "$CURRENT_API/.env" "$PRESERVE_ENV" || true
 
-            echo "[server] deploy api -> $CURRENT_API (exclude .env)"
             sudo mkdir -p "$CURRENT_API"
             sudo rsync -a --exclude='.env' --exclude='.env.*' "$WORK/api/" "$CURRENT_API/"
             sudo chown -R "$OWNER:$OWNER" "$CURRENT_API"
 
-            echo "[server] restore or create .env"
             if [ -f "$PRESERVE_ENV" ]; then
               sudo install -m 600 -o "$OWNER" -g "$OWNER" "$PRESERVE_ENV" "$CURRENT_API/.env"
-              echo "[server] restored existing .env"
             elif [ ! -f "$CURRENT_API/.env" ]; then
               cat > "$WORK/.env.new" <<EOF
             NODE_ENV=production
             PORT=3000
             PUBLIC_BASE_URL=https://dev.clintonprime.com
-
             SESSION_SECRET=${{ secrets.SESSION_SECRET_DEV }}
-
             SPOTIFY_CLIENT_ID=${{ secrets.SPOTIFY_CLIENT_ID_DEV }}
             SPOTIFY_CLIENT_SECRET=${{ secrets.SPOTIFY_CLIENT_SECRET_DEV }}
             SPOTIFY_REDIRECT_URI=https://dev.clintonprime.com/api/spotify/callback
@@ -287,28 +260,16 @@ jobs:
             SPOTIFY_ACCESS_TOKEN=${{ secrets.SPOTIFY_ACCESS_TOKEN_DEV }}
             EOF
               sudo install -m 600 -o "$OWNER" -g "$OWNER" "$WORK/.env.new" "$CURRENT_API/.env"
-              echo "[server] wrote new .env"
             fi
 
-            echo "[server] preflight: run API directly on :$PORT"
             ( PORT=$PORT NODE_ENV=$NODE_ENV node "$CURRENT_API/dist/index.js" & echo $! > "$WORK/test.pid" )
             sleep 2
-            curl -fsS "http://127.0.0.1:$PORT/" >/dev/null || (echo "[server] direct node preflight FAILED"; kill "$(cat "$WORK/test.pid")" 2>/dev/null || true; exit 1)
+            curl -fsS "http://127.0.0.1:$PORT/" >/dev/null || (kill "$(cat "$WORK/test.pid")" 2>/dev/null || true; exit 1)
             kill "$(cat "$WORK/test.pid")" 2>/dev/null || true
 
-            echo "[server] start PM2 fresh on :$PORT (cwd=$CURRENT_API)"
             pm2 delete "$PM2_NAME" >/dev/null 2>&1 || true
             PORT=$PORT NODE_ENV=$NODE_ENV pm2 start "$CURRENT_API/dist/index.js" --name "$PM2_NAME" --time --cwd "$CURRENT_API"
-
-            echo "[server] wait and check PM2 status"
             sleep 4
             pm2 status || true
             pm2 describe "$PM2_NAME" || true
-            if ! pm2 status "$PM2_NAME" | grep -q "online"; then
-              echo "[server] pm2 process not online, showing last logs…"
-              pm2 logs "$PM2_NAME" --lines 200 --nostream || true
-              # exit 1
-            fi
-
             pm2 save || true
-            echo "✅ Deployed web to $WEB_ROOT; shipped API; preserved/created .env; PM2 '$PM2_NAME' running on :$PORT"
