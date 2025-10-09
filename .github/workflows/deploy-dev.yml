@@ -1,4 +1,4 @@
-name: Deploy (Dev) — Server Build Only
+name: Deploy (Dev) — Server Build + Minimal Deploy
 on:
   push:
     branches: [dev]
@@ -9,10 +9,15 @@ concurrency:
   group: deploy-dev-build-only
   cancel-in-progress: true
 
+env:
+  WEB_ROOT: /var/www/html/clintonprime
+  CURRENT_API: /opt/clintonprime-site/current-api
+  PM2_NAME: clintonprime-api-dev
+
 jobs:
-  build-and-server-run:
+  build-and-deploy:
     runs-on: ubuntu-latest
-    environment: dev
+    environment: dev # to access environment-scoped SSH secrets
 
     steps:
       - name: Checkout
@@ -28,7 +33,7 @@ jobs:
         with:
           node-version: 20
 
-      # ---------- WEB (build on runner, no deploy) ----------
+      # ---------- WEB (build on runner) ----------
       - name: Install & Build Web
         working-directory: apps/web
         run: |
@@ -36,11 +41,11 @@ jobs:
           pnpm build
           test -f dist/index.html
 
-      - name: Package Web Dist (for visibility only)
+      - name: Package Web Dist
         run: tar -C apps/web -czf web-dist.tar.gz dist
 
-      # ---------- API (build on RUNNER; ship runtime ready) ----------
-      - name: Install & Build API (runner)
+      # ---------- API (build on runner; ship runtime-ready) ----------
+      - name: Install & Build API
         working-directory: libs/api
         run: |
           pnpm install
@@ -48,7 +53,6 @@ jobs:
           ls -lah dist
           test -f dist/index.js
 
-      # Ship prebuilt dist + node_modules + package.json (no server install)
       - name: Package API Runtime (dist + node_modules + package.json)
         run: tar -C libs/api -czf api-runtime.tar.gz dist node_modules package.json
 
@@ -63,7 +67,7 @@ jobs:
           [ -n "${{ secrets.LIGHTSAIL_USER_DEV }}" ] || (echo "LIGHTSAIL_USER_DEV missing" && exit 1)
           [ -n "${{ secrets.LIGHTSAIL_SSH_KEY_DEV }}" ] || (echo "LIGHTSAIL_SSH_KEY_DEV missing" && exit 1)
 
-      # ---------- UPLOAD ----------
+      # ---------- UPLOAD TO SERVER /tmp ----------
       - name: Upload archives to server (/tmp)
         uses: appleboy/scp-action@v1
         with:
@@ -74,8 +78,8 @@ jobs:
           target: /tmp/
           debug: true
 
-      # ---------- SERVER VERIFY (no rebuild; smoke run API + serve web) ----------
-      - name: Verify on server in /tmp (smoke test prebuilt runtime + static web)
+      # ---------- DEPLOY (copy web to WEB_ROOT, copy api to CURRENT_API, restart PM2) ----------
+      - name: Deploy to server and start PM2 (MVP)
         uses: appleboy/ssh-action@v1.2.0
         with:
           host: ${{ secrets.LIGHTSAIL_HOST_DEV }}
@@ -84,55 +88,50 @@ jobs:
           script_stop: true
           script: |
             set -euo pipefail
+            WEB_ROOT="${{ env.WEB_ROOT }}"
+            CURRENT_API="${{ env.CURRENT_API }}"
+            PM2_NAME="${{ env.PM2_NAME }}"
             SHA="${{ github.sha }}"
             WORK="/tmp/cp-build-${SHA:0:12}"
+            OWNER="$(whoami)"
 
-            echo "[server] preparing workdir: $WORK"
+            echo "[server] prepare workdir: $WORK"
             rm -rf "$WORK"
             mkdir -p "$WORK/web" "$WORK/api"
 
-            echo "[server] unpacking web dist into $WORK/web"
+            echo "[server] unpacking artifacts"
             tar -xzf /tmp/web-dist.tar.gz -C "$WORK/web"
-            rm -f /tmp/web-dist.tar.gz || true
-            if [ -f "$WORK/web/dist/index.html" ]; then
-              echo "[server] web: dist/index.html OK"
-            else
-              echo "[warn] web dist structure unexpected; showing tree:"
-              ls -lah "$WORK/web" || true
-              find "$WORK/web" -maxdepth 2 -type f -name "index.html" -print || true
-            fi
-
-            echo "[server] unpacking API runtime (prebuilt) into $WORK/api"
             tar -xzf /tmp/api-runtime.tar.gz -C "$WORK/api"
-            rm -f /tmp/api-runtime.tar.gz
-            test -f "$WORK/api/dist/index.js"
-            test -d "$WORK/api/node_modules"
+            rm -f /tmp/web-dist.tar.gz /tmp/api-runtime.tar.gz
 
-            echo "[server] ensuring curl present"
-            if ! command -v curl >/dev/null 2>&1; then
-              sudo apt-get update -y
-              sudo apt-get install -y curl
+            echo "[server] ensure tools"
+            sudo apt-get update -y
+            sudo apt-get install -y rsync
+            if ! command -v pm2 >/dev/null 2>&1; then
+              sudo npm i -g pm2
             fi
 
-            echo "[server] node version:"
-            node -v || true
-
-            echo "[server] smoke-run API on :3101"
-            PORT=3101 NODE_ENV=production node "$WORK/api/dist/index.js" & echo $! > "$WORK/api.pid"
-            sleep 2
-            curl -fsS "http://127.0.0.1:3101/" >/dev/null || (echo "[server] API smoke check failed" && kill $(cat "$WORK/api.pid") && exit 1)
-            kill $(cat "$WORK/api.pid") || true
-            rm -f "$WORK/api.pid"
-
-            echo "[server] smoke-serve web on :3102 (python http.server)"
-            if ! command -v python3 >/dev/null 2>&1; then
-              sudo apt-get update -y
-              sudo apt-get install -y python3
+            echo "[server] deploy web -> $WEB_ROOT"
+            sudo mkdir -p "$WEB_ROOT"
+            sudo rsync -a --delete "$WORK/web/dist/" "$WEB_ROOT/"
+            sudo chown -R www-data:www-data "$WEB_ROOT"
+            if command -v nginx >/dev/null 2>&1; then
+              sudo nginx -t && sudo systemctl reload nginx || true
             fi
-            python3 -m http.server 3102 --bind 127.0.0.1 --directory "$WORK/web/dist" >/dev/null 2>&1 & echo $! > "$WORK/web.pid"
-            sleep 2
-            curl -fsS "http://127.0.0.1:3102" >/dev/null
-            kill "$(cat "$WORK/web.pid")" || true
-            rm -f "$WORK/web.pid"
 
-            echo "✅ Server has runnable API at $WORK/api and web at $WORK/web"
+            echo "[server] deploy api -> $CURRENT_API"
+            sudo mkdir -p "$CURRENT_API"
+            # put (dist, node_modules, package.json) at CURRENT_API/
+            sudo rsync -a --delete "$WORK/api/" "$CURRENT_API/"
+            # ensure the SSH user (who runs pm2) owns it
+            sudo chown -R "$OWNER:$OWNER" "$CURRENT_API"
+
+            echo "[server] start/restart PM2: $PM2_NAME"
+            if pm2 describe "$PM2_NAME" >/dev/null 2>&1; then
+              pm2 restart "$PM2_NAME" --update-env
+            else
+              pm2 start "$CURRENT_API/dist/index.js" --name "$PM2_NAME"
+            fi
+            pm2 save
+
+            echo "✅ Deployed web to $WEB_ROOT and API to $CURRENT_API; PM2 $PM2_NAME running."
