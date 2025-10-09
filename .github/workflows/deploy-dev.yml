@@ -54,19 +54,16 @@ jobs:
       - name: Package API bundle
         run: tar -C libs/api -czf api-bundle.tar.gz dist node_modules package.json
 
-      # ---------- VERIFY ----------
-      - name: Verify bundles exist
-        run: |
-          ls -lh web-dist.tar.gz api-bundle.tar.gz
-
-      # ---------- UPLOAD -----------
+      # ---------- UPLOAD ----------
       - name: Upload bundles to server
-        uses: appleboy/scp-action@v1
+        uses: appleboy/scp-action@v0.1.7
         with:
           host: ${{ secrets.LIGHTSAIL_HOST_DEV }}
           username: ${{ secrets.LIGHTSAIL_USER_DEV }}
           key: ${{ secrets.LIGHTSAIL_SSH_KEY_DEV }}
-          source: "web-dist.tar.gz,api-bundle.tar.gz"
+          source: |
+            web-dist.tar.gz
+            api-bundle.tar.gz
           target: /tmp/
 
       # ---------- ACTIVATE ----------
