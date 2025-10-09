@@ -1,10 +1,9 @@
-cat > ~/bootstrap-dev.sh <<'EOF'
 #!/usr/bin/env bash
 set -euo pipefail
 
 # ---------- config ----------
 DOMAIN="dev.clintonprime.com"
-EMAIL="you@example.com"  # <-- change this
+EMAIL="clintonbess3@gmail.com"  # <-- change this
 DEPLOY_USER="ubuntu"
 WEB_ROOT="/var/www/html/clintonprime"
 RELEASES_DIR="/opt/clintonprime-site/releases"
@@ -99,6 +98,3 @@ Next:
 - Run your GitHub deploy to publish web and API
 - API will listen on :3000 (proxied at https://${DOMAIN}/api/*)
 "
-EOF
-
-bash ~/bootstrap-dev.sh
