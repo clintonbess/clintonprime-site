@@ -91,21 +91,19 @@ jobs:
             rm -rf "$WORK"
             mkdir -p "$WORK/web" "$WORK/api"
 
-            echo "[server] unpacking web dist"
-            tar -xzf /tmp/web-dist.tar.gz -C "$WORK"
+            echo "[server] unpacking web dist into $WORK/web"
+            tar -xzf /tmp/web-dist.tar.gz -C "$WORK/web"
             rm -f /tmp/web-dist.tar.gz || true
-            # Normalize structure to $WORK/web/dist
-            if [ -d "$WORK/web-dist/dist" ]; then
-              mv "$WORK/web-dist/dist" "$WORK/web/dist"
-              rm -rf "$WORK/web-dist"
-            elif [ -f "$WORK/web-dist/index.html" ]; then
-              mkdir -p "$WORK/web/dist"
-              mv "$WORK/web-dist/"* "$WORK/web/dist/"
-              rm -rf "$WORK/web-dist"
+            # Expect $WORK/web/dist/index.html after extraction
+            if [ -f "$WORK/web/dist/index.html" ]; then
+              echo "[server] web: dist/index.html OK"
+            else
+              echo "[warn] web dist structure unexpected; showing tree:"
+              ls -lah "$WORK/web" || true
+              find "$WORK/web" -maxdepth 2 -type f -name "index.html" -print || true
             fi
-            test -f "$WORK/web/dist/index.html"
 
-            echo "[server] unpacking API runtime (prebuilt)"
+            echo "[server] unpacking API runtime (prebuilt) into $WORK/api"
             tar -xzf /tmp/api-runtime.tar.gz -C "$WORK/api"
             rm -f /tmp/api-runtime.tar.gz
             test -f "$WORK/api/dist/index.js"
