@@ -227,7 +227,7 @@ export function DesktopEnvironment() {
       {/* App Launcher */}
       <div className="relative z-10 flex flex-col items-center justify-center h-full pt-8">
         <h1 className="text-3xl font-bold mb-8 text-monokai-cyan tracking-wide hover:scale-105 transition-all hover:text-monokai-green">
-          ClintonPrime OS
+          ClintonPrime OS (Dev Testing Environment)
         </h1>
 
         <div className="grid grid-cols-2 md:grid-cols-4 gap-8 text-center">
