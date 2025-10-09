@@ -39,7 +39,7 @@ jobs:
       - name: Package Web
         run: tar -C apps/web -czf web-dist.tar.gz dist
 
-      # ---------- API (build in CI, not on server) ----------
+      # ---------- API (build in CI, not on server) -----------
       - name: Install API deps (prod only)
         run: |
           if [ -f libs/api/package-lock.json ]; then
