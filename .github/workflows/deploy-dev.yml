@@ -10,9 +10,9 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  build-and-server-compile:
+  build-and-server-run:
     runs-on: ubuntu-latest
-    # ensure environment-scoped secrets are available
+    # keep env so environment-scoped secrets (SSH key) flow
     environment: dev
 
     steps:
@@ -40,8 +40,8 @@ jobs:
       - name: Package Web Dist (for visibility only)
         run: tar -C apps/web -czf web-dist.tar.gz dist
 
-      # ---------- API (build on RUNNER; DO NOT rebuild on server) ----------
-      - name: Install & Build API (runner precheck)
+      # ---------- API (build on RUNNER; no rebuild on server) ----------
+      - name: Install & Build API (runner)
         working-directory: libs/api
         run: |
           pnpm install
@@ -49,12 +49,17 @@ jobs:
           ls -lah dist
           test -f dist/index.js
 
-      - name: Package API Dist (no source, no node_modules)
-        run: tar -C libs/api -czf api-dist.tar.gz dist
+      - name: Package API Runtime (dist + package.json [+ lock if present])
+        run: |
+          set -euo pipefail
+          FILES=(dist package.json)
+          [ -f libs/api/package-lock.json ] && FILES+=("package-lock.json")
+          [ -f libs/api/pnpm-lock.yaml ] && FILES+=("pnpm-lock.yaml")
+          tar -C libs/api -czf api-runtime.tar.gz "${FILES[@]}"
 
       # ---------- VERIFY ----------
       - name: Verify archives exist
-        run: ls -lh web-dist.tar.gz api-dist.tar.gz
+        run: ls -lh web-dist.tar.gz api-runtime.tar.gz
 
       # ---------- SECRETS PREFLIGHT ----------
       - name: Secrets preflight
@@ -70,12 +75,12 @@ jobs:
           host: ${{ secrets.LIGHTSAIL_HOST_DEV }}
           username: ${{ secrets.LIGHTSAIL_USER_DEV }}
           key: ${{ secrets.LIGHTSAIL_SSH_KEY_DEV }}
-          source: "web-dist.tar.gz,api-dist.tar.gz"
+          source: "web-dist.tar.gz,api-runtime.tar.gz"
           target: /tmp/
           debug: true
 
-      # ---------- SERVER VERIFY (no rebuild, no pm2, no nginx) ----------
-      - name: Verify builds on server in /tmp
+      # ---------- SERVER VERIFY (no rebuild, install prod deps, smoke run) ----------
+      - name: Verify on server in /tmp (install deps + smoke test)
         uses: appleboy/ssh-action@v1.2.0
         with:
           host: ${{ secrets.LIGHTSAIL_HOST_DEV }}
@@ -89,21 +94,43 @@ jobs:
 
             echo "[server] preparing workdir: $WORK"
             rm -rf "$WORK"
-            mkdir -p "$WORK/web-dist" "$WORK/api-dist"
+            mkdir -p "$WORK/web-dist" "$WORK/api"
 
             echo "[server] unpacking web dist"
             tar -xzf /tmp/web-dist.tar.gz -C "$WORK/web-dist"
             rm -f /tmp/web-dist.tar.gz || true
-            test -f "$WORK/web-dist/index.html" || test -f "$WORK/web-dist/dist/index.html" || echo "[warn] web dist may be nested (ok)"
+            # accept either flat or nested dist/
+            if [ -f "$WORK/web-dist/index.html" ]; then
+              echo "[server] web: index.html OK"
+            elif [ -f "$WORK/web-dist/dist/index.html" ]; then
+              echo "[server] web: nested dist/ OK"
+            else
+              echo "[warn] web dist structure unexpected (continuing)"
+            fi
 
-            echo "[server] unpacking api dist (prebuilt)"
-            tar -xzf /tmp/api-dist.tar.gz -C "$WORK/api-dist"
-            rm -f /tmp/api-dist.tar.gz
-
-            echo "[server] verifying API build artifacts"
-            test -f "$WORK/api-dist/dist/index.js"
+            echo "[server] unpacking api runtime"
+            tar -xzf /tmp/api-runtime.tar.gz -C "$WORK/api"
+            rm -f /tmp/api-runtime.tar.gz
 
             echo "[server] node version:"
             node -v || true
 
-            echo "✅ Server received prebuilt artifacts at $WORK"
+            # Install runtime deps next to dist (no dev deps)
+            cd "$WORK/api"
+            if [ -f package-lock.json ]; then
+              npm ci --omit=dev
+            else
+              npm install --omit=dev
+            fi
+
+            echo "[server] verifying API build artifacts"
+            test -f "$WORK/api/dist/index.js"
+
+            echo "[server] smoke-run API on ephemeral port"
+            PORT=3101 node "$WORK/api/dist/index.js" & echo $! > "$WORK/api.pid"
+            sleep 2
+            curl -fsS "http://127.0.0.1:3101/" || (echo "[server] smoke check failed" && kill $(cat "$WORK/api.pid") && exit 1)
+            kill $(cat "$WORK/api.pid") || true
+            rm -f "$WORK/api.pid"
+
+            echo "✅ Server has runnable build at $WORK"
