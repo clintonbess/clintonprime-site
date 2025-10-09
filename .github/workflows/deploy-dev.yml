@@ -52,12 +52,14 @@ jobs:
           ls -lah dist
           test -f dist/index.js
 
-      - name: Package API Runtime (dist + node_modules + package.json)
-        run: tar -C libs/api -czf api-runtime.tar.gz dist node_modules package.json
+      - name: Package API Runtime (dist + node_modules + package.json + public)
+        run: tar -C libs/api -czf api-runtime.tar.gz dist node_modules package.json public
 
       # ---------- VERIFY ----------
       - name: Verify archives exist
-        run: ls -lh web-dist.tar.gz api-runtime.tar.gz
+        run: |
+          ls -lh web-dist.tar.gz api-runtime.tar.gz
+          echo "api-runtime contents:" && tar -tzf api-runtime.tar.gz | head -n 50
 
       # ---------- SECRETS PREFLIGHT ----------
       - name: Secrets preflight
@@ -136,11 +138,9 @@ jobs:
 
             echo "[server] restore or create .env"
             if [ -f "$PRESERVE_ENV" ]; then
-              # restore the exact previous file and perms
               sudo install -m 600 -o "$OWNER" -g "$OWNER" "$PRESERVE_ENV" "$CURRENT_API/.env"
               echo "[server] restored existing .env"
             elif [ ! -f "$CURRENT_API/.env" ]; then
-              # first deploy: create from secrets
               cat > "$WORK/.env.new" <<EOF
             NODE_ENV=production
             PORT=3000
@@ -179,4 +179,4 @@ jobs:
             fi
 
             pm2 save || true
-            echo "✅ Deployed web to $WEB_ROOT; preserved/created $CURRENT_API/.env; PM2 '$PM2_NAME' running on :$PORT"
+            echo "✅ Deployed web to $WEB_ROOT; shipped API (dist, node_modules, package.json, public) to $CURRENT_API; preserved/created .env; PM2 '$PM2_NAME' running on :$PORT"
