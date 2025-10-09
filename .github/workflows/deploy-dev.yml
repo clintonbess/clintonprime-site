@@ -19,7 +19,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup pnpm (for web build on runner)
+      - name: Setup pnpm
         uses: pnpm/action-setup@v4
         with:
           run_install: false
@@ -40,8 +40,16 @@ jobs:
       - name: Package Web Dist (for visibility only)
         run: tar -C apps/web -czf web-dist.tar.gz dist
 
-      # ---------- API (build on SERVER) ----------
-      # Package API SOURCE (exclude node_modules); we will build on the server
+      # ---------- API (build on RUNNER first) ----------
+      - name: Install & Build API (runner precheck)
+        working-directory: libs/api
+        run: |
+          pnpm install
+          pnpm build
+          ls -lah dist
+          test -f dist/index.js
+
+      # Package API SOURCE (exclude node_modules); we will build again on the server
       - name: Package API Source
         run: tar -C libs/api --exclude=node_modules -czf api-src.tar.gz .
 
@@ -96,7 +104,7 @@ jobs:
             echo "[server] node version:"
             node -v || true
 
-            # Ensure pnpm available for monorepo-style installs if needed later
+            # Ensure pnpm available
             if ! command -v pnpm >/dev/null 2>&1; then
               echo "[server] installing pnpm globally"
               sudo npm i -g pnpm@9
@@ -104,12 +112,9 @@ jobs:
 
             echo "[server] building API from source"
             cd "$WORK/api"
-            if [ -f package-lock.json ]; then
-              npm ci
-            else
-              npm install
-            fi
-            npm run build
+            # use pnpm since that's how we build locally
+            pnpm install
+            pnpm build
 
             echo "[server] verifying API build artifacts"
             test -f "$WORK/api/dist/index.js"
