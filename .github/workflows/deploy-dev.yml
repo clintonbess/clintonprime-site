@@ -12,7 +12,6 @@ concurrency:
 jobs:
   build-and-server-run:
     runs-on: ubuntu-latest
-    # keep env so environment-scoped secrets (SSH key) flow
     environment: dev
 
     steps:
@@ -75,8 +74,8 @@ jobs:
           target: /tmp/
           debug: true
 
-      # ---------- SERVER VERIFY (no rebuild, no install; smoke run) ----------
-      - name: Verify on server in /tmp (smoke test prebuilt runtime)
+      # ---------- SERVER VERIFY (no rebuild; smoke run API + serve web) ----------
+      - name: Verify on server in /tmp (smoke test prebuilt runtime + static web)
         uses: appleboy/ssh-action@v1.2.0
         with:
           host: ${{ secrets.LIGHTSAIL_HOST_DEV }}
@@ -90,35 +89,67 @@ jobs:
 
             echo "[server] preparing workdir: $WORK"
             rm -rf "$WORK"
-            mkdir -p "$WORK/web-dist" "$WORK/api"
+            mkdir -p "$WORK/web" "$WORK/api"
 
             echo "[server] unpacking web dist"
-            tar -xzf /tmp/web-dist.tar.gz -C "$WORK/web-dist"
+            tar -xzf /tmp/web-dist.tar.gz -C "$WORK"
             rm -f /tmp/web-dist.tar.gz || true
-            if [ -f "$WORK/web-dist/index.html" ]; then
-              echo "[server] web: index.html OK"
-            elif [ -f "$WORK/web-dist/dist/index.html" ]; then
-              echo "[server] web: nested dist/ OK"
-            else
-              echo "[warn] web dist structure unexpected (continuing)"
+            # Normalize structure to $WORK/web/dist
+            if [ -d "$WORK/web-dist/dist" ]; then
+              mv "$WORK/web-dist/dist" "$WORK/web/dist"
+              rm -rf "$WORK/web-dist"
+            elif [ -f "$WORK/web-dist/index.html" ]; then
+              mkdir -p "$WORK/web/dist"
+              mv "$WORK/web-dist/"* "$WORK/web/dist/"
+              rm -rf "$WORK/web-dist"
             fi
+            test -f "$WORK/web/dist/index.html"
 
             echo "[server] unpacking API runtime (prebuilt)"
             tar -xzf /tmp/api-runtime.tar.gz -C "$WORK/api"
             rm -f /tmp/api-runtime.tar.gz
-
-            echo "[server] verifying API build artifacts"
             test -f "$WORK/api/dist/index.js"
             test -d "$WORK/api/node_modules"
+
+            echo "[server] ensuring curl present"
+            if ! command -v curl >/dev/null 2>&1; then
+              sudo apt-get update -y
+              sudo apt-get install -y curl
+            fi
 
             echo "[server] node version:"
             node -v || true
 
-            echo "[server] smoke-run API on ephemeral port"
+            echo "[server] smoke-run API on :3101"
             PORT=3101 NODE_ENV=production node "$WORK/api/dist/index.js" & echo $! > "$WORK/api.pid"
             sleep 2
-            curl -fsS "http://127.0.0.1:3101/" || (echo "[server] smoke check failed" && kill $(cat "$WORK/api.pid") && exit 1)
+            curl -fsS "http://127.0.0.1:3101/" >/dev/null || (echo "[server] API smoke check failed" && kill $(cat "$WORK/api.pid") && exit 1)
             kill $(cat "$WORK/api.pid") || true
             rm -f "$WORK/api.pid"
 
-            echo "✅ Server has runnable build at $WORK"
+            echo "[server] prepare web runtime structure like /api (with package.json + node_modules)"
+            cat > "$WORK/web/package.json" << 'JSON'
+            {
+              "name": "web-runtime",
+              "private": true,
+              "scripts": {
+                "start": "serve -s dist -l 3102"
+              },
+              "dependencies": {
+                "serve": "^14.2.1"
+              }
+            }
+            JSON
+
+            echo "[server] install minimal web runtime deps"
+            cd "$WORK/web"
+            npm install --omit=dev
+
+            echo "[server] smoke-serve web on :3102"
+            npm run start & echo $! > "$WORK/web.pid"
+            sleep 2
+            curl -fsS "http://127.0.0.1:3102" >/dev/null
+            kill $(cat "$WORK/web.pid") || true
+            rm -f "$WORK/web.pid"
+
+            echo "✅ Server has runnable API at $WORK/api and web at $WORK/web"
