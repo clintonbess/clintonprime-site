@@ -1,25 +1,23 @@
-name: Deploy (Dev)
+name: Deploy (Dev) — Server Build Only
 on:
   push:
     branches: [dev]
   workflow_dispatch:
 
-env:
-  WEB_ROOT: /var/www/html/clintonprime
-  RELEASES_DIR: /opt/clintonprime-site/releases
-  CURRENT_API: /opt/clintonprime-site/current-api
-  PM2_NAME: clintonprime-api-dev
+# Keep newest run; auto-cancel older ones
+concurrency:
+  group: deploy-dev-build-only
+  cancel-in-progress: true
 
 jobs:
-  deploy:
+  build-and-server-compile:
     runs-on: ubuntu-latest
-    environment: dev
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup pnpm (for web build)
+      - name: Setup pnpm (for web build on runner)
         uses: pnpm/action-setup@v4
         with:
           run_install: false
@@ -29,48 +27,38 @@ jobs:
         with:
           node-version: 20
 
-      # ---------- WEB ----------
-      - name: Build Web
+      # ---------- WEB (build on runner, no deploy) ----------
+      - name: Install & Build Web
         working-directory: apps/web
         run: |
           pnpm install
           pnpm build
+          test -f dist/index.html
 
-      - name: Package Web
+      - name: Package Web Dist (for visibility only)
         run: tar -C apps/web -czf web-dist.tar.gz dist
 
-      # ---------- API ----------
-      - name: Install API deps (prod only)
-        run: |
-          if [ -f libs/api/package-lock.json ]; then
-            npm ci --prefix libs/api --omit=dev
-          else
-            npm install --prefix libs/api --omit=dev
-          fi
-
-      - name: Build API (TS -> dist)
-        run: npm run --prefix libs/api build
-
-      - name: Package API bundle
-        run: tar -C libs/api -czf api-bundle.tar.gz dist node_modules package.json
+      # ---------- API (build on SERVER) ----------
+      # Package API SOURCE (exclude node_modules); we will build on the server
+      - name: Package API Source
+        run: tar -C libs/api --exclude=node_modules -czf api-src.tar.gz .
 
       # ---------- VERIFY ----------
-      - name: Verify bundles exist
-        run: |
-          ls -lh web-dist.tar.gz api-bundle.tar.gz
+      - name: Verify archives exist
+        run: ls -lh web-dist.tar.gz api-src.tar.gz
 
-      # ---------- UPLOAD -----------
-      - name: Upload bundles to server
+      # ---------- UPLOAD ----------
+      - name: Upload archives to server (/tmp)
         uses: appleboy/scp-action@v1
         with:
           host: ${{ secrets.LIGHTSAIL_HOST_DEV }}
           username: ${{ secrets.LIGHTSAIL_USER_DEV }}
           key: ${{ secrets.LIGHTSAIL_SSH_KEY_DEV }}
-          source: "web-dist.tar.gz,api-bundle.tar.gz"
+          source: "web-dist.tar.gz,api-src.tar.gz"
           target: /tmp/
 
-      # ---------- ACTIVATE ----------
-      - name: Activate release on server (safe)
+      # ---------- SERVER BUILD (no release/pm2/nginx/env) ----------
+      - name: Build API on server in /tmp
         uses: appleboy/ssh-action@v1.2.0
         with:
           host: ${{ secrets.LIGHTSAIL_HOST_DEV }}
@@ -79,66 +67,41 @@ jobs:
           script_stop: true
           script: |
             set -euo pipefail
-            WEB_ROOT="${{ env.WEB_ROOT }}"
-            RELEASES_DIR="${{ env.RELEASES_DIR }}"
-            CURRENT_API="${{ env.CURRENT_API }}"
-            PM2_NAME="${{ env.PM2_NAME }}"
             SHA="${{ github.sha }}"
-            REL="$RELEASES_DIR/${SHA:0:12}"
-            OWNER="$(whoami)"
+            WORK="/tmp/cp-build-${SHA:0:12}"
 
-            # Guards
-            for p in "$WEB_ROOT" "$RELEASES_DIR" "$CURRENT_API"; do
-              [ -n "$p" ] && [ "$p" != "/" ] || { echo "Unsafe path '$p'"; exit 1; }
-            done
+            echo "[server] preparing workdir: $WORK"
+            rm -rf "$WORK"
+            mkdir -p "$WORK/web-dist" "$WORK/api"
 
-            sudo apt-get update -y && sudo apt-get install -y rsync
+            echo "[server] unpacking web dist (for inspection only)"
+            tar -xzf /tmp/web-dist.tar.gz -C "$WORK/web-dist"
+            rm -f /tmp/web-dist.tar.gz || true
+            test -f "$WORK/web-dist/index.html" || echo "[warn] web dist has nested structure (ok)"
 
-            # --- Web: rsync to fixed root (no rm -rf)
-            TMP_WEB="$(mktemp -d)"
-            tar -xzf /tmp/web-dist.tar.gz -C "$TMP_WEB" --strip-components=1
-            sudo mkdir -p "$WEB_ROOT"
-            sudo rsync -a --delete "$TMP_WEB"/ "$WEB_ROOT"/
-            sudo chown -R www-data:www-data "$WEB_ROOT"
-            sudo nginx -t && sudo systemctl reload nginx
-            rm -rf "$TMP_WEB" /tmp/web-dist.tar.gz
+            echo "[server] unpacking api source"
+            tar -xzf /tmp/api-src.tar.gz -C "$WORK/api"
+            rm -f /tmp/api-src.tar.gz
 
-            # --- API: versioned release + symlink
-            # Make sure releases path exists
-            sudo mkdir -p "$REL/api"
+            echo "[server] node version:"
+            node -v
 
-            # Extract as root (avoid archive owner ids), then hand back ownership
-            sudo tar --no-same-owner -xzf /tmp/api-bundle.tar.gz -C "$REL/api"
-            sudo rm -f /tmp/api-bundle.tar.gz
-            sudo chown -R "$OWNER:$OWNER" "$REL"
-
-            # Write .env as the SSH user
-            cat > "$REL/api/.env" << 'EOF'
-            NODE_ENV=production
-            PORT=3000
-            PUBLIC_BASE_URL=https://dev.clintonprime.com
-
-            SESSION_SECRET=${{ secrets.SESSION_SECRET_DEV }}
-
-            SPOTIFY_CLIENT_ID=${{ secrets.SPOTIFY_CLIENT_ID_DEV }}
-            SPOTIFY_CLIENT_SECRET=${{ secrets.SPOTIFY_CLIENT_SECRET_DEV }}
-            SPOTIFY_REDIRECT_URI=https://dev.clintonprime.com/api/spotify/callback
-
-            SPOTIFY_REFRESH_TOKEN=${{ secrets.SPOTIFY_REFRESH_TOKEN_DEV }}
-            SPOTIFY_ACCESS_TOKEN=${{ secrets.SPOTIFY_ACCESS_TOKEN_DEV || '' }}
-            EOF
-            chmod 600 "$REL/api/.env"
-
-            # Point current-api to new release
-            sudo ln -sfn "$REL/api" "$CURRENT_API"
-
-            # PM2 restart/start
-            if pm2 describe "$PM2_NAME" >/dev/null 2>&1; then
-              pm2 restart "$PM2_NAME"
-            else
-              pm2 start "$CURRENT_API/dist/index.js" --name "$PM2_NAME"
+            # Ensure pnpm available for monorepo-style installs if needed later
+            if ! command -v pnpm >/dev/null 2>&1; then
+              echo "[server] installing pnpm globally"
+              sudo npm i -g pnpm@9
             fi
-            pm2 save
 
-            # Keep last 5 releases
-            sudo bash -lc 'cd "$RELEASES_DIR" && ls -1t | tail -n +6 | xargs -r rm -rf'
+            echo "[server] building API from source"
+            cd "$WORK/api"
+            if [ -f package-lock.json ]; then
+              npm ci
+            else
+              npm install
+            fi
+            npm run build
+
+            echo "[server] verifying API build artifacts"
+            test -f "$WORK/api/dist/index.js"
+
+            echo "✅ Server build OK at $WORK"
