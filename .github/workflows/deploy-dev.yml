@@ -17,7 +17,7 @@ env:
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
-    environment: dev # to access environment-scoped SSH secrets
+    environment: dev # access environment-scoped SSH secrets
 
     steps:
       - name: Checkout
@@ -106,13 +106,17 @@ jobs:
 
             echo "[server] ensure tools"
             sudo apt-get update -y
-            sudo apt-get install -y rsync
+            sudo apt-get install -y rsync curl
+            # ensure pm2 is in PATH for this user
             if ! command -v pm2 >/dev/null 2>&1; then
               sudo npm i -g pm2
             fi
+            # add npm global bin to PATH (covers some distros)
+            export PATH="$(npm config get prefix 2>/dev/null)/bin:$PATH"
 
             echo "[server] deploy web -> $WEB_ROOT"
             sudo mkdir -p "$WEB_ROOT"
+            # copy the built SPA assets
             sudo rsync -a --delete "$WORK/web/dist/" "$WEB_ROOT/"
             sudo chown -R www-data:www-data "$WEB_ROOT"
             if command -v nginx >/dev/null 2>&1; then
@@ -126,12 +130,27 @@ jobs:
             # ensure the SSH user (who runs pm2) owns it
             sudo chown -R "$OWNER:$OWNER" "$CURRENT_API"
 
-            echo "[server] start/restart PM2: $PM2_NAME"
-            if pm2 describe "$PM2_NAME" >/dev/null 2>&1; then
-              pm2 restart "$PM2_NAME" --update-env
-            else
-              pm2 start "$CURRENT_API/dist/index.js" --name "$PM2_NAME"
-            fi
-            pm2 save
+            echo "[server] start/restart PM2: $PM2_NAME on PORT 3101"
+            # prefer a fixed non-privileged port for dev
+            export PORT=3101
+            export NODE_ENV=production
 
-            echo "✅ Deployed web to $WEB_ROOT and API to $CURRENT_API; PM2 $PM2_NAME running."
+            # try restart if exists, else start
+            if pm2 describe "$PM2_NAME" >/dev/null 2>&1; then
+              pm2 restart "$PM2_NAME" --update-env || PM2_RC=$?
+            else
+              pm2 start "$CURRENT_API/dist/index.js" --name "$PM2_NAME" --time || PM2_RC=$?
+            fi
+
+            # small wait, then verify status; print logs on failure
+            sleep 2
+            pm2 status || true
+            if ! pm2 status "$PM2_NAME" | grep -q "online"; then
+              echo "[server] pm2 process not online, showing describe and last logs…"
+              pm2 describe "$PM2_NAME" || true
+              pm2 logs "$PM2_NAME" --lines 120 --nostream || true
+              exit 1
+            fi
+
+            pm2 save || true
+            echo "✅ Deployed web to $WEB_ROOT and API to $CURRENT_API; PM2 '$PM2_NAME' online on :$PORT"
