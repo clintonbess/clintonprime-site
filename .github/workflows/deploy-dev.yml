@@ -78,7 +78,7 @@ jobs:
           target: /tmp/
           debug: true
 
-      # ---------- DEPLOY (copy web to WEB_ROOT, copy api to CURRENT_API, start PM2) ----------
+      # ---------- DEPLOY (copy web to WEB_ROOT, copy api to CURRENT_API, write .env, start PM2) ----------
       - name: Deploy to server and start PM2 (MVP)
         uses: appleboy/ssh-action@v1.2.0
         with:
@@ -114,8 +114,7 @@ jobs:
               sudo npm i -g pm2
             fi
             export PATH="$(npm config get prefix 2>/dev/null)/bin:/usr/local/bin:$PATH"
-            echo "[server] pm2 = $(command -v pm2 || echo 'not found')"
-            pm2 -v || true
+            echo "[server] pm2 path: $(command -v pm2 || echo 'not found')"
 
             echo "[server] deploy web -> $WEB_ROOT"
             sudo mkdir -p "$WEB_ROOT"
@@ -130,15 +129,31 @@ jobs:
             sudo rsync -a --delete "$WORK/api/" "$CURRENT_API/"
             sudo chown -R "$OWNER:$OWNER" "$CURRENT_API"
 
+            echo "[server] write .env to $CURRENT_API (.gitignored on server)"
+            cat > "$CURRENT_API/.env" <<EOF
+            NODE_ENV=production
+            PORT=3000
+            PUBLIC_BASE_URL=https://dev.clintonprime.com
+
+            SESSION_SECRET=${{ secrets.SESSION_SECRET_DEV }}
+
+            SPOTIFY_CLIENT_ID=${{ secrets.SPOTIFY_CLIENT_ID_DEV }}
+            SPOTIFY_CLIENT_SECRET=${{ secrets.SPOTIFY_CLIENT_SECRET_DEV }}
+            SPOTIFY_REDIRECT_URI=https://dev.clintonprime.com/api/spotify/callback
+            SPOTIFY_REFRESH_TOKEN=${{ secrets.SPOTIFY_REFRESH_TOKEN_DEV }}
+            SPOTIFY_ACCESS_TOKEN=${{ secrets.SPOTIFY_ACCESS_TOKEN_DEV }}
+            EOF
+            chmod 600 "$CURRENT_API/.env"
+
             echo "[server] preflight: run API directly on :$PORT"
             ( PORT=$PORT NODE_ENV=$NODE_ENV node "$CURRENT_API/dist/index.js" & echo $! > "$WORK/test.pid" )
             sleep 2
             curl -fsS "http://127.0.0.1:$PORT/" >/dev/null || (echo "[server] direct node preflight FAILED"; kill "$(cat "$WORK/test.pid")" 2>/dev/null || true; exit 1)
             kill "$(cat "$WORK/test.pid")" 2>/dev/null || true
 
-            echo "[server] start PM2 fresh on :$PORT"
+            echo "[server] start PM2 fresh on :$PORT (cwd=$CURRENT_API)"
             pm2 delete "$PM2_NAME" >/dev/null 2>&1 || true
-            PORT=$PORT NODE_ENV=$NODE_ENV pm2 start "$CURRENT_API/dist/index.js" --name "$PM2_NAME" --time
+            PORT=$PORT NODE_ENV=$NODE_ENV pm2 start "$CURRENT_API/dist/index.js" --name "$PM2_NAME" --time --cwd "$CURRENT_API"
 
             echo "[server] wait and check PM2 status"
             sleep 4
@@ -147,9 +162,9 @@ jobs:
             if ! pm2 status "$PM2_NAME" | grep -q "online"; then
               echo "[server] pm2 process not online, showing last logs…"
               pm2 logs "$PM2_NAME" --lines 200 --nostream || true
-              # Keep deploy green while we iterate; flip to `exit 1` to hard-fail.
+              # Uncomment to hard-fail if PM2 isn't online:
               # exit 1
             fi
 
             pm2 save || true
-            echo "✅ Deployed web to $WEB_ROOT and API to $CURRENT_API; PM2 '$PM2_NAME' online check performed on :$PORT"
+            echo "✅ Deployed web to $WEB_ROOT, wrote $CURRENT_API/.env, and PM2 '$PM2_NAME' started on :$PORT"
