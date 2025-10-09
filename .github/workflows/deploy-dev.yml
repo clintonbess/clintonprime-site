@@ -57,7 +57,7 @@ jobs:
           source: web-dist.tar.gz
           target: /tmp/
 
-      # 7) Deploy Web on server (SAFE: rsync, no rm -rf)
+      # 7) Deploy Web (safe)
       - name: Deploy Web (safe)
         uses: appleboy/ssh-action@v1.2.0
         with:
@@ -68,7 +68,6 @@ jobs:
           script: |
             set -euo pipefail
             WEB_ROOT="${{ env.WEB_ROOT }}"
-            # Guards
             if [ -z "$WEB_ROOT" ] || [ "$WEB_ROOT" = "/" ]; then
               echo "Refusing to operate on WEB_ROOT='$WEB_ROOT'"; exit 1;
             fi
@@ -76,9 +75,8 @@ jobs:
             sudo apt-get update -y && sudo apt-get install -y rsync
 
             TMP_DIR="$(mktemp -d)"
-            sudo tar -xzf /tmp/web-dist.tar.gz -C "$TMP_DIR" --strip-components=1
+            tar -xzf /tmp/web-dist.tar.gz -C "$TMP_DIR" --strip-components=1   # <— no sudo here
 
-            # Sync new build safely; --delete removes only files inside WEB_ROOT not present in TMP_DIR
             sudo mkdir -p "$WEB_ROOT"
             sudo rsync -a --delete "$TMP_DIR"/ "$WEB_ROOT"/
 
