@@ -35,11 +35,10 @@ jobs:
         run: |
           pnpm install
           pnpm build
-
       - name: Package Web
         run: tar -C apps/web -czf web-dist.tar.gz dist
 
-      # ---------- API (build in CI, not on server) -----------
+      # ---------- API (build in CI, not on server) ----------
       - name: Install API deps (prod only)
         run: |
           if [ -f libs/api/package-lock.json ]; then
@@ -47,23 +46,24 @@ jobs:
           else
             npm install --prefix libs/api --omit=dev
           fi
-
       - name: Build API (TS -> dist)
         run: npm run --prefix libs/api build
 
       - name: Package API bundle
         run: tar -C libs/api -czf api-bundle.tar.gz dist node_modules package.json
 
-      # ---------- UPLOAD ----------
+      # ---------- VERIFY ----------
+      - name: Verify bundles exist
+        run: |
+          ls -lh web-dist.tar.gz api-bundle.tar.gz
+      # ---------- UPLOAD -----------
       - name: Upload bundles to server
-        uses: appleboy/scp-action@v0.1.7
+        uses: appleboy/scp-action@v1
         with:
           host: ${{ secrets.LIGHTSAIL_HOST_DEV }}
           username: ${{ secrets.LIGHTSAIL_USER_DEV }}
           key: ${{ secrets.LIGHTSAIL_SSH_KEY_DEV }}
-          source: |
-            web-dist.tar.gz
-            api-bundle.tar.gz
+          source: "web-dist.tar.gz,api-bundle.tar.gz"
           target: /tmp/
 
       # ---------- ACTIVATE ----------
@@ -82,14 +82,11 @@ jobs:
             PM2_NAME="${{ env.PM2_NAME }}"
             SHA="${{ github.sha }}"
             REL="$RELEASES_DIR/${SHA:0:12}"
-
             # Guards
             for p in "$WEB_ROOT" "$RELEASES_DIR" "$CURRENT_API"; do
               [ -n "$p" ] && [ "$p" != "/" ] || { echo "Unsafe path '$p'"; exit 1; }
             done
-
             sudo apt-get update -y && sudo apt-get install -y rsync
-
             # --- Web: rsync to fixed root (no rm -rf)
             TMP_WEB="$(mktemp -d)"
             tar -xzf /tmp/web-dist.tar.gz -C "$TMP_WEB" --strip-components=1
@@ -98,31 +95,24 @@ jobs:
             sudo chown -R www-data:www-data "$WEB_ROOT"
             sudo nginx -t && sudo systemctl reload nginx
             rm -rf "$TMP_WEB" /tmp/web-dist.tar.gz
-
             # --- API: versioned release + symlink
             sudo mkdir -p "$REL/api"
             tar -xzf /tmp/api-bundle.tar.gz -C "$REL/api"
             rm -f /tmp/api-bundle.tar.gz
-
             # Write .env into the new release (no secrets in repo)
             sudo tee "$REL/api/.env" >/dev/null << 'EOF'
             NODE_ENV=production
             PORT=3000
             PUBLIC_BASE_URL=https://dev.clintonprime.com
-
             SESSION_SECRET=${{ secrets.SESSION_SECRET_DEV }}
-
             SPOTIFY_CLIENT_ID=${{ secrets.SPOTIFY_CLIENT_ID_DEV }}
             SPOTIFY_CLIENT_SECRET=${{ secrets.SPOTIFY_CLIENT_SECRET_DEV }}
             SPOTIFY_REDIRECT_URI=https://dev.clintonprime.com/api/spotify/callback
-
             SPOTIFY_REFRESH_TOKEN=${{ secrets.SPOTIFY_REFRESH_TOKEN_DEV }}
             SPOTIFY_ACCESS_TOKEN=${{ secrets.SPOTIFY_ACCESS_TOKEN_DEV || '' }}
             EOF
-
             # Atomically point current-api to the new release
             sudo ln -sfn "$REL/api" "$CURRENT_API"
-
             # PM2 restart/start
             if pm2 describe "$PM2_NAME" >/dev/null 2>&1; then
               pm2 restart "$PM2_NAME"
@@ -130,6 +120,5 @@ jobs:
               pm2 start "$CURRENT_API/dist/index.js" --name "$PM2_NAME"
             fi
             pm2 save
-
             # Keep last 5 releases
             sudo bash -lc 'cd "$RELEASES_DIR" && ls -1t | tail -n +6 | xargs -r rm -rf'
