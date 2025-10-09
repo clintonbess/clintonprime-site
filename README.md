@@ -2,7 +2,7 @@
 
 A small mono-style project with:
 
-Live site: [clintonprime.com](https://clintonprime.com)
+Live site: [dev.clintonprime.com](https://dev.clintonprime.com)
 
 - `libs/api`: Node/Express API with Spotify integration and local media serving
 - `apps/web`: Vite + React frontend styled with a Monokai-inspired theme
