@@ -9,9 +9,16 @@ concurrency:
   cancel-in-progress: true
 
 env:
+  # --- app paths / proc name ---
   WEB_ROOT: /var/www/html/clintonprime
   CURRENT_API: /opt/clintonprime-site/current-api
   PM2_NAME: clintonprime-api-dev
+
+  # --- bootstrap vars ---
+  DOMAIN: dev.clintonprime.com
+  EMAIL: clintonbess3@gmail.com
+  DEPLOY_USER: ubuntu
+  RELEASES_DIR: /opt/clintonprime-site/releases
 
 jobs:
   build-and-deploy:
@@ -59,7 +66,7 @@ jobs:
       - name: Verify archives exist
         run: |
           ls -lh web-dist.tar.gz api-runtime.tar.gz
-          echo "api-runtime contents:" && tar -tzf api-runtime.tar.gz | head -n 50
+          echo "api-runtime contents:" && tar -tzf api-runtime.tar.gz | head -n 40
 
       # ---------- SECRETS PREFLIGHT ----------
       - name: Secrets preflight
@@ -78,6 +85,131 @@ jobs:
           source: "web-dist.tar.gz,api-runtime.tar.gz"
           target: /tmp/
           debug: true
+
+      # ---------- BOOTSTRAP (first run only; safe to re-run) ----------
+      - name: Bootstrap server (idempotent)
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.LIGHTSAIL_HOST_DEV }}
+          username: ${{ secrets.LIGHTSAIL_USER_DEV }}
+          key: ${{ secrets.LIGHTSAIL_SSH_KEY_DEV }}
+          script_stop: true
+          script: |
+            set -euo pipefail
+            MARKER="/opt/clintonprime-site/.bootstrapped"
+
+            if [ -f "$MARKER" ]; then
+              echo "[bootstrap] already bootstrapped, skipping."
+              exit 0
+            fi
+
+            echo "[bootstrap] writing bootstrap script"
+            cat > /tmp/bootstrap-dev.sh <<'BOOT'
+            #!/usr/bin/env bash
+            set -euo pipefail
+            export DEBIAN_FRONTEND=noninteractive
+
+            # ---------- config (env-overridable) ----------
+            DOMAIN="${DOMAIN:-dev.clintonprime.com}"
+            EMAIL="${EMAIL:-clintonbess3@gmail.com}"
+            DEPLOY_USER="${DEPLOY_USER:-ubuntu}"
+            WEB_ROOT="${WEB_ROOT:-/var/www/html/clintonprime}"
+            RELEASES_DIR="${RELEASES_DIR:-/opt/clintonprime-site/releases}"
+            CURRENT_API="${CURRENT_API:-/opt/clintonprime-site/current-api}"
+            PM2_NAME="${PM2_NAME:-clintonprime-api-dev}"
+            # ---------------------------------------------
+
+            echo "[1/6] apt & base packages"
+            sudo apt-get update -y
+            sudo apt-get install -y nginx git curl rsync ufw
+
+            echo "[2/6] node 20 + pm2 (global)"
+            curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
+            sudo apt-get install -y nodejs
+            sudo npm i -g pm2
+            sudo pm2 startup systemd -u "$DEPLOY_USER" --hp "/home/$DEPLOY_USER" --silent || true
+
+            echo "[3/6] filesystem layout"
+            sudo mkdir -p "$WEB_ROOT" "$RELEASES_DIR" "$(dirname "$CURRENT_API")"
+            sudo chown -R www-data:www-data "$WEB_ROOT"
+            sudo chown -R "$DEPLOY_USER":"$DEPLOY_USER" "$(dirname "$RELEASES_DIR")" "$RELEASES_DIR" "$(dirname "$CURRENT_API")" || true
+
+            echo "[4/6] nginx site (HTTP first, ACME allowed)"
+            sudo tee /etc/nginx/sites-available/clintonprime-dev >/dev/null <<NGX
+            server {
+              listen 80;
+              listen [::]:80;
+              server_name ${DOMAIN};
+
+              # ACME challenge
+              location ^~ /.well-known/acme-challenge/ { root ${WEB_ROOT}; }
+
+              root ${WEB_ROOT};
+              index index.html;
+
+              # SPA
+              location / { try_files \$uri \$uri/ /index.html; }
+
+              # API proxy
+              location /api/ {
+                proxy_pass http://localhost:3000/api/;
+                proxy_http_version 1.1;
+                proxy_set_header Host \$host;
+                proxy_set_header X-Real-IP \$remote_addr;
+                proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+                proxy_set_header X-Forwarded-Proto \$scheme;
+              }
+
+              # Media proxy
+              location /media/ {
+                proxy_pass http://localhost:3000/media/;
+                proxy_http_version 1.1;
+                proxy_set_header Host \$host;
+                proxy_set_header X-Real-IP \$remote_addr;
+                proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+                proxy_set_header X-Forwarded-Proto \$scheme;
+              }
+
+              add_header X-Frame-Options "SAMEORIGIN";
+              add_header X-Content-Type-Options "nosniff";
+              add_header Referrer-Policy "strict-origin-when-cross-origin";
+              add_header X-XSS-Protection "1; mode=block";
+            }
+            NGX
+
+            sudo ln -sf /etc/nginx/sites-available/clintonprime-dev /etc/nginx/sites-enabled/clintonprime-dev
+            [ -e /etc/nginx/sites-enabled/default ] && sudo rm -f /etc/nginx/sites-enabled/default || true
+            sudo nginx -t && sudo systemctl reload nginx
+
+            echo "[5/6] placeholder index (once)"
+            [ -f "${WEB_ROOT}/index.html" ] || echo '<!doctype html><meta charset="utf-8"><title>clintonprime dev</title><h1>dev env up ✅</h1>' | sudo tee "${WEB_ROOT}/index.html" >/dev/null
+            sudo systemctl reload nginx
+
+            echo "[6/6] HTTPS via certbot (auto redirect)"
+            sudo apt-get install -y certbot python3-certbot-nginx
+            sudo certbot --nginx -d "${DOMAIN}" --non-interactive --agree-tos -m "${EMAIL}" --redirect || true
+            sudo nginx -t && sudo systemctl reload nginx || true
+
+            sudo ufw allow 'Nginx Full' || true
+
+            echo "Bootstrap complete."
+            BOOT
+
+            chmod +x /tmp/bootstrap-dev.sh
+
+            echo "[bootstrap] exporting variables and running script"
+            DOMAIN="${{ env.DOMAIN }}" \
+            EMAIL="${{ env.EMAIL }}" \
+            DEPLOY_USER="${{ env.DEPLOY_USER }}" \
+            WEB_ROOT="${{ env.WEB_ROOT }}" \
+            RELEASES_DIR="${{ env.RELEASES_DIR }}" \
+            CURRENT_API="${{ env.CURRENT_API }}" \
+            PM2_NAME="${{ env.PM2_NAME }}" \
+            /tmp/bootstrap-dev.sh
+
+            sudo mkdir -p "$(dirname "$MARKER")"
+            echo "$(date -Iseconds) bootstrapped" | sudo tee "$MARKER" >/dev/null
+            echo "[bootstrap] marker created: $MARKER"
 
       # ---------- DEPLOY ----------
       - name: Deploy to server and start PM2 (MVP)
@@ -175,8 +307,8 @@ jobs:
             if ! pm2 status "$PM2_NAME" | grep -q "online"; then
               echo "[server] pm2 process not online, showing last logs…"
               pm2 logs "$PM2_NAME" --lines 200 --nostream || true
-              # exit 1  # uncomment to hard-fail
+              # exit 1
             fi
 
             pm2 save || true
-            echo "✅ Deployed web to $WEB_ROOT; shipped API (dist, node_modules, package.json, public) to $CURRENT_API; preserved/created .env; PM2 '$PM2_NAME' running on :$PORT"
+            echo "✅ Deployed web to $WEB_ROOT; shipped API; preserved/created .env; PM2 '$PM2_NAME' running on :$PORT"

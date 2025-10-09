@@ -3,7 +3,7 @@ set -euo pipefail
 
 # ---------- config ----------
 DOMAIN="dev.clintonprime.com"
-EMAIL="clintonbess3@gmail.com"   # <-- change this
+EMAIL="clintonbess3@gmail.com"  
 DEPLOY_USER="ubuntu"
 WEB_ROOT="/var/www/html/clintonprime"
 RELEASES_DIR="/opt/clintonprime-site/releases"
