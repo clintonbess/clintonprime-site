@@ -8,7 +8,6 @@ import {
   faFileLines,
   faPlay,
   faPause,
-  faHeadphones,
 } from "@fortawesome/free-solid-svg-icons";
 import { QuantumWindow } from "./quantum-window";
 import { ProgrammingWindow } from "./programming-window";
