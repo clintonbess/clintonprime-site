@@ -12,6 +12,8 @@ concurrency:
 jobs:
   build-and-server-compile:
     runs-on: ubuntu-latest
+    # ensure environment-scoped secrets are available
+    environment: dev
 
     steps:
       - name: Checkout
@@ -47,6 +49,13 @@ jobs:
       - name: Verify archives exist
         run: ls -lh web-dist.tar.gz api-src.tar.gz
 
+      # ---------- SECRETS PREFLIGHT ----------
+      - name: Secrets preflight
+        run: |
+          [ -n "${{ secrets.LIGHTSAIL_HOST_DEV }}" ] || (echo "LIGHTSAIL_HOST_DEV missing" && exit 1)
+          [ -n "${{ secrets.LIGHTSAIL_USER_DEV }}" ] || (echo "LIGHTSAIL_USER_DEV missing" && exit 1)
+          [ -n "${{ secrets.LIGHTSAIL_SSH_KEY_DEV }}" ] || (echo "LIGHTSAIL_SSH_KEY_DEV missing" && exit 1)
+
       # ---------- UPLOAD ----------
       - name: Upload archives to server (/tmp)
         uses: appleboy/scp-action@v1
@@ -56,6 +65,7 @@ jobs:
           key: ${{ secrets.LIGHTSAIL_SSH_KEY_DEV }}
           source: "web-dist.tar.gz,api-src.tar.gz"
           target: /tmp/
+          debug: true
 
       # ---------- SERVER BUILD (no release/pm2/nginx/env) ----------
       - name: Build API on server in /tmp
@@ -84,7 +94,7 @@ jobs:
             rm -f /tmp/api-src.tar.gz
 
             echo "[server] node version:"
-            node -v
+            node -v || true
 
             # Ensure pnpm available for monorepo-style installs if needed later
             if ! command -v pnpm >/dev/null 2>&1; then
