@@ -52,6 +52,7 @@ jobs:
 
       # 3️⃣ Build Frontend
       - name: Build Web
+
         working-directory: apps/web
         run: |
           pnpm install --frozen-lockfile
