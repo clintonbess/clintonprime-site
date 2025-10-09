@@ -49,11 +49,9 @@ export function MusicWindow({
   useEffect(() => {
     async function loadLocal() {
       try {
-        console.log("fetching tracks bruh");
         const res = await fetch("/api/music/tracks");
         if (!res.ok) throw new Error("Failed to load tracks");
         const data = await res.json();
-        console.log(data);
         if (Array.isArray(data.tracks)) setLocalTracks(data.tracks);
       } catch (err) {
         console.warn("Failed to load local tracks:", err);

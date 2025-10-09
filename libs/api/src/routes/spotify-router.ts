@@ -149,8 +149,6 @@ router.get("/current", async (_req, res) => {
 
 router.get("/recent", async (_req, res) => {
   try {
-    console.log("Fetching recent tracks");
-
     // Fetch last 5 recently played tracks
     const recent = await spotifyApi.getMyRecentlyPlayedTracks({ limit: 5 });
 

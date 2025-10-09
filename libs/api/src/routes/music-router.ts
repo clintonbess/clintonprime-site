@@ -40,7 +40,6 @@ router.get("/tracks", async (_req, res) => {
 router.get("/cover/:filename", async (req, res) => {
   try {
     const file = decodeURIComponent(req.params.filename);
-    console.log(file);
     const fullPath = path.join(mediaDir, file);
 
     if (!fs.existsSync(fullPath)) return res.status(404).send("File not found");

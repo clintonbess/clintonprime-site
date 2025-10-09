@@ -17,7 +17,6 @@ app.use(
   "/media",
   express.static(mediaDir, {
     setHeaders: (res, filePath) => {
-      console.log("settings header for this filepath", filePath);
       if (filePath.endsWith(".mp3")) {
         res.setHeader("Content-Type", "audio/mpeg");
         res.setHeader("Accept-Ranges", "bytes");
