@@ -96,7 +96,12 @@ jobs:
           script: |
             set -euo pipefail
             API_REPO_DIR="${{ env.API_REPO_DIR }}"
+
+            # Create path as root, then hand ownership to current user
             sudo mkdir -p "$API_REPO_DIR/libs/api"
+            sudo chown -R $USER:$USER "$API_REPO_DIR"
+
+            # Now write .env as the user
             cat > "$API_REPO_DIR/libs/api/.env" << 'EOF'
             NODE_ENV=production
             PORT=3000
