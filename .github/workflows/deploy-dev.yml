@@ -104,14 +104,15 @@ jobs:
             rm -rf "$TMP_WEB" /tmp/web-dist.tar.gz
 
             # --- API: versioned release + symlink
-            # Create release dir owned by the SSH user so we can write without sudo
-            sudo install -d -o "$OWNER" -g "$OWNER" "$REL/api"
+            # Make sure releases path exists
+            sudo mkdir -p "$REL/api"
 
-            # Extract bundle (no sudo needed now)
-            tar -xzf /tmp/api-bundle.tar.gz -C "$REL/api"
-            rm -f /tmp/api-bundle.tar.gz
+            # Extract as root (avoid archive owner ids), then hand back ownership
+            sudo tar --no-same-owner -xzf /tmp/api-bundle.tar.gz -C "$REL/api"
+            sudo rm -f /tmp/api-bundle.tar.gz
+            sudo chown -R "$OWNER:$OWNER" "$REL"
 
-            # Write .env owned by the SSH user (no sudo tee)
+            # Write .env as the SSH user
             cat > "$REL/api/.env" << 'EOF'
             NODE_ENV=production
             PORT=3000
@@ -128,7 +129,7 @@ jobs:
             EOF
             chmod 600 "$REL/api/.env"
 
-            # Atomically point current-api to the new release
+            # Point current-api to new release
             sudo ln -sfn "$REL/api" "$CURRENT_API"
 
             # PM2 restart/start
