@@ -94,7 +94,6 @@ jobs:
             echo "[server] unpacking web dist into $WORK/web"
             tar -xzf /tmp/web-dist.tar.gz -C "$WORK/web"
             rm -f /tmp/web-dist.tar.gz || true
-            # Expect $WORK/web/dist/index.html after extraction
             if [ -f "$WORK/web/dist/index.html" ]; then
               echo "[server] web: dist/index.html OK"
             else
@@ -125,29 +124,15 @@ jobs:
             kill $(cat "$WORK/api.pid") || true
             rm -f "$WORK/api.pid"
 
-            echo "[server] prepare web runtime structure like /api (with package.json + node_modules)"
-            cat > "$WORK/web/package.json" << 'JSON'
-            {
-              "name": "web-runtime",
-              "private": true,
-              "scripts": {
-                "start": "serve -s dist -l 3102"
-              },
-              "dependencies": {
-                "serve": "^14.2.1"
-              }
-            }
-            JSON
-
-            echo "[server] install minimal web runtime deps"
-            cd "$WORK/web"
-            npm install --omit=dev
-
-            echo "[server] smoke-serve web on :3102"
-            npm run start & echo $! > "$WORK/web.pid"
+            echo "[server] smoke-serve web on :3102 (python http.server)"
+            if ! command -v python3 >/dev/null 2>&1; then
+              sudo apt-get update -y
+              sudo apt-get install -y python3
+            fi
+            python3 -m http.server 3102 --bind 127.0.0.1 --directory "$WORK/web/dist" >/dev/null 2>&1 & echo $! > "$WORK/web.pid"
             sleep 2
             curl -fsS "http://127.0.0.1:3102" >/dev/null
-            kill $(cat "$WORK/web.pid") || true
+            kill "$(cat "$WORK/web.pid")" || true
             rm -f "$WORK/web.pid"
 
             echo "✅ Server has runnable API at $WORK/api and web at $WORK/web"
