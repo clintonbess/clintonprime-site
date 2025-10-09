@@ -122,22 +122,26 @@ jobs:
               sudo nginx -t && sudo systemctl reload nginx || true
             fi
 
-            echo "[server] check existing env before API deploy"
-            ENV_EXISTED=false
+            echo "[server] stash existing .env if present"
+            PRESERVE_ENV="$WORK/.env.keep"
             if [ -f "$CURRENT_API/.env" ]; then
-              ENV_EXISTED=true
-              echo "[server] found existing .env, will preserve it"
+              sudo cp "$CURRENT_API/.env" "$PRESERVE_ENV"
+              echo "[server] stashed .env"
             fi
 
-            echo "[server] deploy api -> $CURRENT_API (preserve .env)"
+            echo "[server] deploy api -> $CURRENT_API (exclude .env)"
             sudo mkdir -p "$CURRENT_API"
-            # No --delete here, and explicitly exclude .env so it is never touched
             sudo rsync -a --exclude='.env' --exclude='.env.*' "$WORK/api/" "$CURRENT_API/"
             sudo chown -R "$OWNER:$OWNER" "$CURRENT_API"
 
-            if [ "$ENV_EXISTED" = false ]; then
-              echo "[server] writing new .env to $CURRENT_API"
-              cat > "$CURRENT_API/.env" <<EOF
+            echo "[server] restore or create .env"
+            if [ -f "$PRESERVE_ENV" ]; then
+              # restore the exact previous file and perms
+              sudo install -m 600 -o "$OWNER" -g "$OWNER" "$PRESERVE_ENV" "$CURRENT_API/.env"
+              echo "[server] restored existing .env"
+            elif [ ! -f "$CURRENT_API/.env" ]; then
+              # first deploy: create from secrets
+              cat > "$WORK/.env.new" <<EOF
             NODE_ENV=production
             PORT=3000
             PUBLIC_BASE_URL=https://dev.clintonprime.com
@@ -150,9 +154,8 @@ jobs:
             SPOTIFY_REFRESH_TOKEN=${{ secrets.SPOTIFY_REFRESH_TOKEN_DEV }}
             SPOTIFY_ACCESS_TOKEN=${{ secrets.SPOTIFY_ACCESS_TOKEN_DEV }}
             EOF
-              chmod 600 "$CURRENT_API/.env"
-            else
-              echo "[server] keeping existing .env (no overwrite)"
+              sudo install -m 600 -o "$OWNER" -g "$OWNER" "$WORK/.env.new" "$CURRENT_API/.env"
+              echo "[server] wrote new .env"
             fi
 
             echo "[server] preflight: run API directly on :$PORT"
@@ -172,8 +175,8 @@ jobs:
             if ! pm2 status "$PM2_NAME" | grep -q "online"; then
               echo "[server] pm2 process not online, showing last logs…"
               pm2 logs "$PM2_NAME" --lines 200 --nostream || true
-              # exit 1  # uncomment to hard-fail if you want
+              # exit 1  # uncomment to hard-fail
             fi
 
             pm2 save || true
-            echo "✅ Deployed web to $WEB_ROOT, preserved $CURRENT_API/.env when present, and PM2 '$PM2_NAME' started on :$PORT"
+            echo "✅ Deployed web to $WEB_ROOT; preserved/created $CURRENT_API/.env; PM2 '$PM2_NAME' running on :$PORT"
