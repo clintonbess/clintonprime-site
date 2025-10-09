@@ -126,17 +126,15 @@ jobs:
             ENV_EXISTED=false
             if [ -f "$CURRENT_API/.env" ]; then
               ENV_EXISTED=true
-              cp "$CURRENT_API/.env" "$WORK/env.prev"
               echo "[server] found existing .env, will preserve it"
             fi
 
             echo "[server] deploy api -> $CURRENT_API (preserve .env)"
             sudo mkdir -p "$CURRENT_API"
-            # EXCLUDE .env so it stays intact
-            sudo rsync -a --delete --exclude='.env' "$WORK/api/" "$CURRENT_API/"
+            # No --delete here, and explicitly exclude .env so it is never touched
+            sudo rsync -a --exclude='.env' --exclude='.env.*' "$WORK/api/" "$CURRENT_API/"
             sudo chown -R "$OWNER:$OWNER" "$CURRENT_API"
 
-            # Create .env only if it doesn't already exist
             if [ "$ENV_EXISTED" = false ]; then
               echo "[server] writing new .env to $CURRENT_API"
               cat > "$CURRENT_API/.env" <<EOF
