@@ -99,19 +99,13 @@ jobs:
               exit 0
             fi
 
-            echo "[bootstrap] writing bootstrap script"
-            cat > /tmp/bootstrap-dev.sh <<'BOOT'
-            #!/usr/bin/env bash
-            set -euo pipefail
-            export DEBIAN_FRONTEND=noninteractive
-
-            DOMAIN="${DOMAIN:-dev.clintonprime.com}"
-            EMAIL="${EMAIL:-clintonbess3@gmail.com}"
-            DEPLOY_USER="${DEPLOY_USER:-ubuntu}"
-            WEB_ROOT="${WEB_ROOT:-/var/www/html/clintonprime}"
-            RELEASES_DIR="${RELEASES_DIR:-/opt/clintonprime-site/releases}"
-            CURRENT_API="${CURRENT_API:-/opt/clintonprime-site/current-api}"
-            PM2_NAME="${PM2_NAME:-clintonprime-api-dev}"
+            DOMAIN="${{ env.DOMAIN }}"
+            EMAIL="${{ env.EMAIL }}"
+            DEPLOY_USER="${{ env.DEPLOY_USER }}"
+            WEB_ROOT="${{ env.WEB_ROOT }}"
+            RELEASES_DIR="${{ env.RELEASES_DIR }}"
+            CURRENT_API="${{ env.CURRENT_API }}"
+            PM2_NAME="${{ env.PM2_NAME }}"
 
             echo "[1/6] apt & base packages"
             sudo apt-get update -y
@@ -128,40 +122,43 @@ jobs:
             sudo chown -R www-data:www-data "$WEB_ROOT"
             sudo chown -R "$DEPLOY_USER":"$DEPLOY_USER" "$(dirname "$RELEASES_DIR")" "$RELEASES_DIR" "$(dirname "$CURRENT_API")" || true
 
-            echo "[4/6] nginx site (HTTP first, ACME allowed)"
-            cat > /tmp/clintonprime-dev.tmpl <<'NGX'
+            echo "[4/6] nginx site (template -> sed -> tee)"
+            # remove any corrupted file from previous runs
+            sudo rm -f /etc/nginx/sites-available/clintonprime-dev /etc/nginx/sites-enabled/clintonprime-dev || true
+
+            cat >/tmp/clintonprime-dev.tmpl <<'NGX'
             server {
               listen 80;
               listen [::]:80;
-              server_name ${DOMAIN};
+              server_name __DOMAIN__;
 
               # ACME challenge
-              location ^~ /.well-known/acme-challenge/ { root ${WEB_ROOT}; }
+              location ^~ /.well-known/acme-challenge/ { root __WEB_ROOT__; }
 
-              root ${WEB_ROOT};
+              root __WEB_ROOT__;
               index index.html;
 
               # SPA
-              location / { try_files $uri $uri/ /index.html; }
+              location / { try_files \$uri \$uri/ /index.html; }
 
               # API proxy
               location /api/ {
                 proxy_pass http://localhost:3000/api/;
                 proxy_http_version 1.1;
-                proxy_set_header Host $host;
-                proxy_set_header X-Real-IP $remote_addr;
-                proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-                proxy_set_header X-Forwarded-Proto $scheme;
+                proxy_set_header Host \$host;
+                proxy_set_header X-Real-IP \$remote_addr;
+                proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+                proxy_set_header X-Forwarded-Proto \$scheme;
               }
 
               # Media proxy
               location /media/ {
                 proxy_pass http://localhost:3000/media/;
                 proxy_http_version 1.1;
-                proxy_set_header Host $host;
-                proxy_set_header X-Real-IP $remote_addr;
-                proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-                proxy_set_header X-Forwarded-Proto $scheme;
+                proxy_set_header Host \$host;
+                proxy_set_header X-Real-IP \$remote_addr;
+                proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+                proxy_set_header X-Forwarded-Proto \$scheme;
               }
 
               add_header X-Frame-Options "SAMEORIGIN";
@@ -171,11 +168,11 @@ jobs:
             }
             NGX
 
-            # substitute only DOMAIN and WEB_ROOT to avoid touching $uri/$host/etc.
-            sudo sh -c "envsubst '\${DOMAIN} \${WEB_ROOT}' < /tmp/clintonprime-dev.tmpl > /etc/nginx/sites-available/clintonprime-dev"
+            # Safely substitute placeholders and write via tee (avoids wrapper text in file)
+            sed -e "s|__DOMAIN__|$DOMAIN|g" -e "s|__WEB_ROOT__|$WEB_ROOT|g" /tmp/clintonprime-dev.tmpl \
+              | sudo tee /etc/nginx/sites-available/clintonprime-dev >/dev/null
 
             sudo ln -sf /etc/nginx/sites-available/clintonprime-dev /etc/nginx/sites-enabled/clintonprime-dev
-            [ -e /etc/nginx/sites-enabled/default ] && sudo rm -f /etc/nginx/sites-enabled/default || true
             sudo nginx -t && sudo systemctl reload nginx
 
             echo "[5/6] placeholder index (once)"
@@ -184,24 +181,13 @@ jobs:
 
             echo "[6/6] HTTPS via certbot (auto redirect)"
             sudo apt-get install -y certbot python3-certbot-nginx
-            sudo certbot --nginx -d "${DOMAIN}" --non-interactive --agree-tos -m "${EMAIL}" --redirect || true
+            sudo certbot --nginx -d "$DOMAIN" --non-interactive --agree-tos -m "$EMAIL" --redirect || true
             sudo nginx -t && sudo systemctl reload nginx || true
             sudo ufw allow 'Nginx Full' || true
-            BOOT
-
-            chmod +x /tmp/bootstrap-dev.sh
-            DOMAIN="${{ env.DOMAIN }}" \
-            EMAIL="${{ env.EMAIL }}" \
-            DEPLOY_USER="${{ env.DEPLOY_USER }}" \
-            WEB_ROOT="${{ env.WEB_ROOT }}" \
-            RELEASES_DIR="${{ env.RELEASES_DIR }}" \
-            CURRENT_API="${{ env.CURRENT_API }}" \
-            PM2_NAME="${{ env.PM2_NAME }}" \
-            /tmp/bootstrap-dev.sh
 
             sudo mkdir -p "$(dirname "$MARKER")"
             echo "$(date -Iseconds) bootstrapped" | sudo tee "$MARKER" >/dev/null
-            echo "[bootstrap] marker created: $MARKER"
+            echo "[bootstrap] done"
 
       # ---------- DEPLOY (unchanged from before) ----------
       - name: Deploy to server and start PM2 (MVP)
