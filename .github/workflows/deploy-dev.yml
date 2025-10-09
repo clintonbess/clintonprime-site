@@ -129,20 +129,38 @@ jobs:
             sudo rsync -a --delete "$WORK/api/" "$CURRENT_API/"
             sudo chown -R "$OWNER:$OWNER" "$CURRENT_API"
 
-            echo "[server] write .env to $CURRENT_API (.gitignored on server)"
-            cat > "$CURRENT_API/.env" <<EOF
-            NODE_ENV=production
-            PORT=3000
-            PUBLIC_BASE_URL=https://dev.clintonprime.com
+            echo "[server] build .env (reuse existing tokens if secrets are blank)"
+            # pull tokens from secrets first
+            REF_SEC="${{ secrets.SPOTIFY_REFRESH_TOKEN_DEV }}"
+            ACC_SEC="${{ secrets.SPOTIFY_ACCESS_TOKEN_DEV }}"
+            REF_VAL="$REF_SEC"
+            ACC_VAL="$ACC_SEC"
+            # fallback to existing file values if secrets empty
+            if [ -z "$REF_VAL" ] && [ -f "$CURRENT_API/.env" ]; then
+              REF_VAL="$(sed -n 's/^SPOTIFY_REFRESH_TOKEN=//p' "$CURRENT_API/.env" | head -n1 || true)"
+              [ -n "$REF_VAL" ] && echo "[server] reusing existing SPOTIFY_REFRESH_TOKEN"
+            fi
+            if [ -z "$ACC_VAL" ] && [ -f "$CURRENT_API/.env" ]; then
+              ACC_VAL="$(sed -n 's/^SPOTIFY_ACCESS_TOKEN=//p' "$CURRENT_API/.env" | head -n1 || true)"
+              [ -n "$ACC_VAL" ] && echo "[server] reusing existing SPOTIFY_ACCESS_TOKEN"
+            fi
 
-            SESSION_SECRET=${{ secrets.SESSION_SECRET_DEV }}
-
-            SPOTIFY_CLIENT_ID=${{ secrets.SPOTIFY_CLIENT_ID_DEV }}
-            SPOTIFY_CLIENT_SECRET=${{ secrets.SPOTIFY_CLIENT_SECRET_DEV }}
-            SPOTIFY_REDIRECT_URI=https://dev.clintonprime.com/api/spotify/callback
-            SPOTIFY_REFRESH_TOKEN=${{ secrets.SPOTIFY_REFRESH_TOKEN_DEV }}
-            SPOTIFY_ACCESS_TOKEN=${{ secrets.SPOTIFY_ACCESS_TOKEN_DEV }}
-            EOF
+            # write merged env atomically
+            ENV_TMP="$WORK/.env.tmp"
+            {
+              echo "NODE_ENV=production"
+              echo "PORT=3000"
+              echo "PUBLIC_BASE_URL=https://dev.clintonprime.com"
+              echo
+              echo "SESSION_SECRET=${{ secrets.SESSION_SECRET_DEV }}"
+              echo
+              echo "SPOTIFY_CLIENT_ID=${{ secrets.SPOTIFY_CLIENT_ID_DEV }}"
+              echo "SPOTIFY_CLIENT_SECRET=${{ secrets.SPOTIFY_CLIENT_SECRET_DEV }}"
+              echo "SPOTIFY_REDIRECT_URI=https://dev.clintonprime.com/api/spotify/callback"
+              echo "SPOTIFY_REFRESH_TOKEN=${REF_VAL}"
+              echo "SPOTIFY_ACCESS_TOKEN=${ACC_VAL}"
+            } > "$ENV_TMP"
+            mv "$ENV_TMP" "$CURRENT_API/.env"
             chmod 600 "$CURRENT_API/.env"
 
             echo "[server] preflight: run API directly on :$PORT"
@@ -167,4 +185,4 @@ jobs:
             fi
 
             pm2 save || true
-            echo "✅ Deployed web to $WEB_ROOT, wrote $CURRENT_API/.env, and PM2 '$PM2_NAME' started on :$PORT"
+            echo "✅ Deployed web to $WEB_ROOT, merged $CURRENT_API/.env (tokens preserved), and PM2 '$PM2_NAME' started on :$PORT"
