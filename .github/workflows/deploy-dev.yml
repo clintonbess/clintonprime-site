@@ -6,7 +6,7 @@ on:
 
 env:
   WEB_ROOT: /var/www/html/clintonprime
-  API_REPO_DIR: /opt/clintonprime-site/repo # <-- dedicated repo folder
+  API_REPO_DIR: /opt/clintonprime-site/repo
   PM2_NAME: clintonprime-api-dev
 
 jobs:
@@ -55,20 +55,19 @@ jobs:
           script_stop: true
           script: |
             set -euo pipefail
+            echo "[web] deploying"
             WEB_ROOT="${{ env.WEB_ROOT }}"
             [ -n "$WEB_ROOT" ] && [ "$WEB_ROOT" != "/" ] || { echo "Bad WEB_ROOT='$WEB_ROOT'"; exit 1; }
 
             sudo apt-get update -y && sudo apt-get install -y rsync
-
             TMP_DIR="$(mktemp -d)"
-            tar -xzf /tmp/web-dist.tar.gz -C "$TMP_DIR" --strip-components=1   # no sudo → owned by ubuntu
-
+            tar -xzf /tmp/web-dist.tar.gz -C "$TMP_DIR" --strip-components=1  # extract as ubuntu
             sudo mkdir -p "$WEB_ROOT"
             sudo rsync -a --delete "$TMP_DIR"/ "$WEB_ROOT"/
             sudo chown -R www-data:www-data "$WEB_ROOT"
             sudo nginx -t && sudo systemctl reload nginx
-
             rm -rf "$TMP_DIR" /tmp/web-dist.tar.gz
+            echo "[web] done"
 
       - name: Write .env on server (dev)
         uses: appleboy/ssh-action@v1.2.0
@@ -79,9 +78,12 @@ jobs:
           script_stop: true
           script: |
             set -euo pipefail
+            echo "[api] writing .env"
             API_REPO_DIR="${{ env.API_REPO_DIR }}"
+            OWNER="$(whoami)"
+
             sudo mkdir -p "$API_REPO_DIR/libs/api"
-            sudo chown -R $USER:$USER "$API_REPO_DIR"
+            sudo chown -R "$OWNER:$OWNER" "$API_REPO_DIR"
 
             cat > "$API_REPO_DIR/libs/api/.env" << 'EOF'
             NODE_ENV=production
@@ -97,6 +99,7 @@ jobs:
             SPOTIFY_REFRESH_TOKEN=${{ secrets.SPOTIFY_REFRESH_TOKEN_DEV }}
             SPOTIFY_ACCESS_TOKEN=${{ secrets.SPOTIFY_ACCESS_TOKEN_DEV || '' }}
             EOF
+            echo "[api] .env written"
 
       - name: Deploy API (clone/init safely + pm2 restart)
         uses: appleboy/ssh-action@v1.2.0
@@ -107,26 +110,28 @@ jobs:
           script_stop: true
           script: |
             set -euo pipefail
+            echo "[api] deploying"
             API_REPO_DIR="${{ env.API_REPO_DIR }}"
             PM2_NAME="${{ env.PM2_NAME }}"
             REPO_URL="https://github.com/${{ github.repository }}"
+            OWNER="$(whoami)"
 
             sudo mkdir -p "$API_REPO_DIR"
-            sudo chown -R $USER:$USER "$API_REPO_DIR"
+            sudo chown -R "$OWNER:$OWNER" "$API_REPO_DIR"
 
             if [ -d "$API_REPO_DIR/.git" ]; then
-              echo "Repo exists; fetching"
+              echo "[api] repo exists; fetching"
               cd "$API_REPO_DIR"
               git fetch --all --tags
             else
               if [ "$(ls -A "$API_REPO_DIR" 2>/dev/null | wc -l)" -gt 0 ]; then
-                echo "Dir exists and not a git repo; initializing in place"
+                echo "[api] dir exists, not a repo; initializing"
                 cd "$API_REPO_DIR"
                 git init
                 git remote add origin "$REPO_URL" || git remote set-url origin "$REPO_URL"
                 git fetch --all --tags
               else
-                echo "Cloning fresh"
+                echo "[api] cloning fresh"
                 git clone "$REPO_URL" "$API_REPO_DIR"
                 cd "$API_REPO_DIR"
               fi
@@ -139,9 +144,15 @@ jobs:
               corepack enable || true
               corepack prepare pnpm@9 --activate || npm i -g pnpm@9
             fi
+
             cd libs/api
             pnpm install
             pnpm build
 
-            pm2 describe "$PM2_NAME" >/dev/null 2>&1 && pm2 restart "$PM2_NAME" || pm2 start dist/index.js --name "$PM2_NAME"
+            if pm2 describe "$PM2_NAME" >/dev/null 2>&1; then
+              pm2 restart "$PM2_NAME"
+            else
+              pm2 start dist/index.js --name "$PM2_NAME"
+            fi
             pm2 save
+            echo "[api] done"
