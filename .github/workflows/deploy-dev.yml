@@ -6,7 +6,8 @@ on:
 
 env:
   WEB_ROOT: /var/www/html/clintonprime
-  API_REPO_DIR: /opt/clintonprime-site/repo
+  RELEASES_DIR: /opt/clintonprime-site/releases
+  CURRENT_API: /opt/clintonprime-site/current-api
   PM2_NAME: clintonprime-api-dev
 
 jobs:
@@ -18,7 +19,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup pnpm
+      - name: Setup pnpm (for web build)
         uses: pnpm/action-setup@v4
         with:
           run_install: false
@@ -28,6 +29,7 @@ jobs:
         with:
           node-version: 20
 
+      # ---------- WEB ----------
       - name: Build Web
         working-directory: apps/web
         run: |
@@ -37,16 +39,35 @@ jobs:
       - name: Package Web
         run: tar -C apps/web -czf web-dist.tar.gz dist
 
-      - name: Upload Web
+      # ---------- API (build in CI, not on server) ----------
+      - name: Install API deps (prod only)
+        run: |
+          if [ -f libs/api/package-lock.json ]; then
+            npm ci --prefix libs/api --omit=dev
+          else
+            npm install --prefix libs/api --omit=dev
+          fi
+
+      - name: Build API (TS -> dist)
+        run: npm run --prefix libs/api build
+
+      - name: Package API bundle
+        run: tar -C libs/api -czf api-bundle.tar.gz dist node_modules package.json
+
+      # ---------- UPLOAD ----------
+      - name: Upload bundles to server
         uses: appleboy/scp-action@v0.1.7
         with:
           host: ${{ secrets.LIGHTSAIL_HOST_DEV }}
           username: ${{ secrets.LIGHTSAIL_USER_DEV }}
           key: ${{ secrets.LIGHTSAIL_SSH_KEY_DEV }}
-          source: web-dist.tar.gz
+          source: |
+            web-dist.tar.gz
+            api-bundle.tar.gz
           target: /tmp/
 
-      - name: Deploy Web (safe)
+      # ---------- ACTIVATE ----------
+      - name: Activate release on server (safe)
         uses: appleboy/ssh-action@v1.2.0
         with:
           host: ${{ secrets.LIGHTSAIL_HOST_DEV }}
@@ -55,37 +76,36 @@ jobs:
           script_stop: true
           script: |
             set -euo pipefail
-            echo "[web] deploying"
             WEB_ROOT="${{ env.WEB_ROOT }}"
-            [ -n "$WEB_ROOT" ] && [ "$WEB_ROOT" != "/" ] || { echo "Bad WEB_ROOT='$WEB_ROOT'"; exit 1; }
+            RELEASES_DIR="${{ env.RELEASES_DIR }}"
+            CURRENT_API="${{ env.CURRENT_API }}"
+            PM2_NAME="${{ env.PM2_NAME }}"
+            SHA="${{ github.sha }}"
+            REL="$RELEASES_DIR/${SHA:0:12}"
+
+            # Guards
+            for p in "$WEB_ROOT" "$RELEASES_DIR" "$CURRENT_API"; do
+              [ -n "$p" ] && [ "$p" != "/" ] || { echo "Unsafe path '$p'"; exit 1; }
+            done
 
             sudo apt-get update -y && sudo apt-get install -y rsync
-            TMP_DIR="$(mktemp -d)"
-            tar -xzf /tmp/web-dist.tar.gz -C "$TMP_DIR" --strip-components=1  # extract as ubuntu
+
+            # --- Web: rsync to fixed root (no rm -rf)
+            TMP_WEB="$(mktemp -d)"
+            tar -xzf /tmp/web-dist.tar.gz -C "$TMP_WEB" --strip-components=1
             sudo mkdir -p "$WEB_ROOT"
-            sudo rsync -a --delete "$TMP_DIR"/ "$WEB_ROOT"/
+            sudo rsync -a --delete "$TMP_WEB"/ "$WEB_ROOT"/
             sudo chown -R www-data:www-data "$WEB_ROOT"
             sudo nginx -t && sudo systemctl reload nginx
-            rm -rf "$TMP_DIR" /tmp/web-dist.tar.gz
-            echo "[web] done"
+            rm -rf "$TMP_WEB" /tmp/web-dist.tar.gz
 
-      - name: Write .env on server (dev)
-        uses: appleboy/ssh-action@v1.2.0
-        with:
-          host: ${{ secrets.LIGHTSAIL_HOST_DEV }}
-          username: ${{ secrets.LIGHTSAIL_USER_DEV }}
-          key: ${{ secrets.LIGHTSAIL_SSH_KEY_DEV }}
-          script_stop: true
-          script: |
-            set -euo pipefail
-            echo "[api] writing .env"
-            API_REPO_DIR="${{ env.API_REPO_DIR }}"
-            OWNER="$(whoami)"
+            # --- API: versioned release + symlink
+            sudo mkdir -p "$REL/api"
+            tar -xzf /tmp/api-bundle.tar.gz -C "$REL/api"
+            rm -f /tmp/api-bundle.tar.gz
 
-            sudo mkdir -p "$API_REPO_DIR/libs/api"
-            sudo chown -R "$OWNER:$OWNER" "$API_REPO_DIR"
-
-            cat > "$API_REPO_DIR/libs/api/.env" << 'EOF'
+            # Write .env into the new release (no secrets in repo)
+            sudo tee "$REL/api/.env" >/dev/null << 'EOF'
             NODE_ENV=production
             PORT=3000
             PUBLIC_BASE_URL=https://dev.clintonprime.com
@@ -99,60 +119,17 @@ jobs:
             SPOTIFY_REFRESH_TOKEN=${{ secrets.SPOTIFY_REFRESH_TOKEN_DEV }}
             SPOTIFY_ACCESS_TOKEN=${{ secrets.SPOTIFY_ACCESS_TOKEN_DEV || '' }}
             EOF
-            echo "[api] .env written"
 
-      - name: Deploy API (clone/init safely + pm2 restart)
-        uses: appleboy/ssh-action@v1.2.0
-        with:
-          host: ${{ secrets.LIGHTSAIL_HOST_DEV }}
-          username: ${{ secrets.LIGHTSAIL_USER_DEV }}
-          key: ${{ secrets.LIGHTSAIL_SSH_KEY_DEV }}
-          script_stop: true
-          script: |
-            set -euo pipefail
-            echo "[api] deploying"
-            API_REPO_DIR="${{ env.API_REPO_DIR }}"
-            PM2_NAME="${{ env.PM2_NAME }}"
-            REPO_URL="https://github.com/${{ github.repository }}"
-            OWNER="$(whoami)"
+            # Atomically point current-api to the new release
+            sudo ln -sfn "$REL/api" "$CURRENT_API"
 
-            sudo mkdir -p "$API_REPO_DIR"
-            sudo chown -R "$OWNER:$OWNER" "$API_REPO_DIR"
-
-            if [ -d "$API_REPO_DIR/.git" ]; then
-              echo "[api] repo exists; fetching"
-              cd "$API_REPO_DIR"
-              git fetch --all --tags
-            else
-              if [ "$(ls -A "$API_REPO_DIR" 2>/dev/null | wc -l)" -gt 0 ]; then
-                echo "[api] dir exists, not a repo; initializing"
-                cd "$API_REPO_DIR"
-                git init
-                git remote add origin "$REPO_URL" || git remote set-url origin "$REPO_URL"
-                git fetch --all --tags
-              else
-                echo "[api] cloning fresh"
-                git clone "$REPO_URL" "$API_REPO_DIR"
-                cd "$API_REPO_DIR"
-              fi
-            fi
-
-            git checkout -f ${{ github.sha }}
-
-            # Ensure pnpm
-            if ! command -v pnpm >/dev/null 2>&1; then
-              corepack enable || true
-              corepack prepare pnpm@9 --activate || npm i -g pnpm@9
-            fi
-
-            cd libs/api
-            pnpm install
-            pnpm build
-
+            # PM2 restart/start
             if pm2 describe "$PM2_NAME" >/dev/null 2>&1; then
               pm2 restart "$PM2_NAME"
             else
-              pm2 start dist/index.js --name "$PM2_NAME"
+              pm2 start "$CURRENT_API/dist/index.js" --name "$PM2_NAME"
             fi
             pm2 save
-            echo "[api] done"
+
+            # Keep last 5 releases
+            sudo bash -lc 'cd "$RELEASES_DIR" && ls -1t | tail -n +6 | xargs -r rm -rf'
