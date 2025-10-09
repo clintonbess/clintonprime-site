@@ -111,9 +111,39 @@ sudo systemctl reload nginx
 
 ## Deploy
 
+### Deployment: Dev (GitHub Actions)
+
+Pushes to the `dev` branch (or a manual run) trigger the workflow `Deploy (Dev) — Server Build + Minimal Deploy` defined in `.github/workflows/deploy-dev.yml`.
+
+- What it does (high level):
+
+  - Builds the frontend and API on the GitHub runner, then packages artifacts
+  - Uploads artifacts to the server and (on first run) bootstraps the host: installs Nginx, Node 20, PM2, provisions an Nginx site for `dev.clintonprime.com`, obtains TLS via Certbot, and opens the firewall
+  - Publishes the web files to `/var/www/html/clintonprime`
+  - Syncs API runtime (dist + node_modules + public + package.json) to `/opt/clintonprime-site/current-api`
+  - Preserves an existing `.env` or creates one from GitHub Secrets, smoke-tests the API locally, and starts it with PM2 as `clintonprime-api-dev`
+
+- Required GitHub Secrets (environment: `dev`):
+
+  - `LIGHTSAIL_HOST_DEV`, `LIGHTSAIL_USER_DEV`, `LIGHTSAIL_SSH_KEY_DEV`
+  - `SESSION_SECRET_DEV`
+  - `SPOTIFY_CLIENT_ID_DEV`, `SPOTIFY_CLIENT_SECRET_DEV`
+  - `SPOTIFY_REFRESH_TOKEN_DEV` (optional), `SPOTIFY_ACCESS_TOKEN_DEV` (optional)
+
+- Server paths and process names:
+
+  - Web root: `/var/www/html/clintonprime`
+  - API runtime dir: `/opt/clintonprime-site/current-api`
+  - PM2 process: `clintonprime-api-dev` (use `pm2 logs clintonprime-api-dev --lines 100`)
+
+- How to trigger:
+  - Push to `dev` branch, or in GitHub → Actions → select "Deploy (Dev) — Server Build + Minimal Deploy" → Run workflow
+
+Tip: After the first deploy, visit `https://dev.clintonprime.com/api/spotify/login` once to seed Spotify tokens if you didn't provide refresh/access tokens via secrets.
+
 Two simple approaches:
 
-### Option A: Same-origin (recommended)
+### Deployment: Same-origin
 
 - Serve the frontend at `https://yourdomain.com`
 - Reverse-proxy `/api/*` and `/media/*` to the API service (e.g., `http://127.0.0.1:3000`)
@@ -148,11 +178,6 @@ server {
   listen 80;
 }
 ```
-
-### Option B: Separate frontend and API domains
-
-- Add CORS to the API, e.g. `app.use(cors({ origin: process.env.WEB_ORIGIN }))`
-- Use `VITE_API_BASE` in the frontend to prefix API and media URLs
 
 ### DNS (Namecheap)
 
