@@ -19,7 +19,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup pnpm
+      - name: Setup pnpm (for web build on runner)
         uses: pnpm/action-setup@v4
         with:
           run_install: false
@@ -40,7 +40,7 @@ jobs:
       - name: Package Web Dist (for visibility only)
         run: tar -C apps/web -czf web-dist.tar.gz dist
 
-      # ---------- API (build on RUNNER first) ----------
+      # ---------- API (build on RUNNER; DO NOT rebuild on server) ----------
       - name: Install & Build API (runner precheck)
         working-directory: libs/api
         run: |
@@ -49,13 +49,12 @@ jobs:
           ls -lah dist
           test -f dist/index.js
 
-      # Package API SOURCE (exclude node_modules); we will build again on the server
-      - name: Package API Source
-        run: tar -C libs/api --exclude=node_modules -czf api-src.tar.gz .
+      - name: Package API Dist (no source, no node_modules)
+        run: tar -C libs/api -czf api-dist.tar.gz dist
 
       # ---------- VERIFY ----------
       - name: Verify archives exist
-        run: ls -lh web-dist.tar.gz api-src.tar.gz
+        run: ls -lh web-dist.tar.gz api-dist.tar.gz
 
       # ---------- SECRETS PREFLIGHT ----------
       - name: Secrets preflight
@@ -71,12 +70,12 @@ jobs:
           host: ${{ secrets.LIGHTSAIL_HOST_DEV }}
           username: ${{ secrets.LIGHTSAIL_USER_DEV }}
           key: ${{ secrets.LIGHTSAIL_SSH_KEY_DEV }}
-          source: "web-dist.tar.gz,api-src.tar.gz"
+          source: "web-dist.tar.gz,api-dist.tar.gz"
           target: /tmp/
           debug: true
 
-      # ---------- SERVER BUILD (no release/pm2/nginx/env) ----------
-      - name: Build API on server in /tmp
+      # ---------- SERVER VERIFY (no rebuild, no pm2, no nginx) ----------
+      - name: Verify builds on server in /tmp
         uses: appleboy/ssh-action@v1.2.0
         with:
           host: ${{ secrets.LIGHTSAIL_HOST_DEV }}
@@ -90,33 +89,21 @@ jobs:
 
             echo "[server] preparing workdir: $WORK"
             rm -rf "$WORK"
-            mkdir -p "$WORK/web-dist" "$WORK/api"
+            mkdir -p "$WORK/web-dist" "$WORK/api-dist"
 
-            echo "[server] unpacking web dist (for inspection only)"
+            echo "[server] unpacking web dist"
             tar -xzf /tmp/web-dist.tar.gz -C "$WORK/web-dist"
             rm -f /tmp/web-dist.tar.gz || true
-            test -f "$WORK/web-dist/index.html" || echo "[warn] web dist has nested structure (ok)"
+            test -f "$WORK/web-dist/index.html" || test -f "$WORK/web-dist/dist/index.html" || echo "[warn] web dist may be nested (ok)"
 
-            echo "[server] unpacking api source"
-            tar -xzf /tmp/api-src.tar.gz -C "$WORK/api"
-            rm -f /tmp/api-src.tar.gz
+            echo "[server] unpacking api dist (prebuilt)"
+            tar -xzf /tmp/api-dist.tar.gz -C "$WORK/api-dist"
+            rm -f /tmp/api-dist.tar.gz
+
+            echo "[server] verifying API build artifacts"
+            test -f "$WORK/api-dist/dist/index.js"
 
             echo "[server] node version:"
             node -v || true
 
-            # Ensure pnpm available
-            if ! command -v pnpm >/dev/null 2>&1; then
-              echo "[server] installing pnpm globally"
-              sudo npm i -g pnpm@9
-            fi
-
-            echo "[server] building API from source"
-            cd "$WORK/api"
-            # use pnpm since that's how we build locally
-            pnpm install
-            pnpm build
-
-            echo "[server] verifying API build artifacts"
-            test -f "$WORK/api/dist/index.js"
-
-            echo "✅ Server build OK at $WORK"
+            echo "✅ Server received prebuilt artifacts at $WORK"
