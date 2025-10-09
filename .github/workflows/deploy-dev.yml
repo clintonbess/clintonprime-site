@@ -1,0 +1,222 @@
+name: Deploy (Dev) — Server Build + Minimal Deploy
+on:
+  push:
+    branches: [dev]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-dev-build-only
+  cancel-in-progress: true
+
+env:
+  WEB_ROOT: /var/www/html/clintonprime
+  CURRENT_API: /opt/clintonprime-site/current-api
+  PM2_NAME: clintonprime-api-dev
+  DOMAIN: dev.clintonprime.com
+  EMAIL: clintonbess3@gmail.com
+  DEPLOY_USER: ubuntu
+  RELEASES_DIR: /opt/clintonprime-site/releases
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    environment: dev
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm (for web build on runner)
+        uses: pnpm/action-setup@v4
+        with:
+          run_install: false
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      # ---------- WEB ----------
+      - name: Install & Build Web
+        working-directory: apps/web
+        run: |
+          pnpm install
+          pnpm build
+          test -f dist/index.html
+
+      - name: Package Web Dist
+        run: tar -C apps/web -czf web-dist.tar.gz dist
+
+      # ---------- API ----------
+      - name: Install & Build API
+        working-directory: libs/api
+        run: |
+          pnpm install
+          pnpm build
+          ls -lah dist
+          test -f dist/index.js
+
+      - name: Package API Runtime (dist + node_modules + package.json + public)
+        run: tar -C libs/api -czf api-runtime.tar.gz dist node_modules package.json public
+
+      # ---------- VERIFY ----------
+      - name: Verify archives exist
+        run: |
+          ls -lh web-dist.tar.gz api-runtime.tar.gz
+          echo "api-runtime contents:" && tar -tzf api-runtime.tar.gz | head -n 40
+
+      # ---------- SECRETS PREFLIGHT ----------
+      - name: Secrets preflight
+        run: |
+          [ -n "${{ secrets.LIGHTSAIL_HOST_DEV }}" ] || (echo "LIGHTSAIL_HOST_DEV missing" && exit 1)
+          [ -n "${{ secrets.LIGHTSAIL_USER_DEV }}" ] || (echo "LIGHTSAIL_USER_DEV missing" && exit 1)
+          [ -n "${{ secrets.LIGHTSAIL_SSH_KEY_DEV }}" ] || (echo "LIGHTSAIL_SSH_KEY_DEV missing" && exit 1)
+
+      # ---------- UPLOAD ----------
+      - name: Upload archives to server (/tmp)
+        uses: appleboy/scp-action@v1
+        with:
+          host: ${{ secrets.LIGHTSAIL_HOST_DEV }}
+          username: ${{ secrets.LIGHTSAIL_USER_DEV }}
+          key: ${{ secrets.LIGHTSAIL_SSH_KEY_DEV }}
+          source: "web-dist.tar.gz,api-runtime.tar.gz"
+          target: /tmp/
+          debug: true
+
+      # ---------- BOOTSTRAP (first run only; safe to re-run) ----------
+      - name: Bootstrap server (idempotent)
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.LIGHTSAIL_HOST_DEV }}
+          username: ${{ secrets.LIGHTSAIL_USER_DEV }}
+          key: ${{ secrets.LIGHTSAIL_SSH_KEY_DEV }}
+          script_stop: true
+          script: |
+            set -euo pipefail
+            MARKER="/opt/clintonprime-site/.bootstrapped"
+            if [ -f "$MARKER" ]; then
+              echo "[bootstrap] already bootstrapped, skipping."
+              exit 0
+            fi
+
+            DOMAIN="${{ env.DOMAIN }}"
+            EMAIL="${{ env.EMAIL }}"
+            DEPLOY_USER="${{ env.DEPLOY_USER }}"
+            WEB_ROOT="${{ env.WEB_ROOT }}"
+            RELEASES_DIR="${{ env.RELEASES_DIR }}"
+            CURRENT_API="${{ env.CURRENT_API }}"
+            PM2_NAME="${{ env.PM2_NAME }}"
+
+            echo "[1/6] apt & base packages"
+            sudo apt-get update -y
+            sudo apt-get install -y nginx git curl rsync ufw
+
+            echo "[2/6] node 20 + pm2 (global)"
+            curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
+            sudo apt-get install -y nodejs
+            sudo npm i -g pm2
+            sudo pm2 startup systemd -u "$DEPLOY_USER" --hp "/home/$DEPLOY_USER" --silent || true
+
+            echo "[3/6] filesystem layout"
+            sudo mkdir -p "$WEB_ROOT" "$RELEASES_DIR" "$(dirname "$CURRENT_API")"
+            sudo chown -R www-data:www-data "$WEB_ROOT"
+            sudo chown -R "$DEPLOY_USER":"$DEPLOY_USER" "$(dirname "$RELEASES_DIR")" "$RELEASES_DIR" "$(dirname "$CURRENT_API")" || true
+
+            echo "[4/6] nginx site (printf -> sed -> tee; no heredoc)"
+            # clean any corrupted files from previous runs
+            sudo rm -f /etc/nginx/sites-available/clintonprime-dev /etc/nginx/sites-enabled/clintonprime-dev || true
+
+            CFG=$'server {\n  listen 80;\n  listen [::]:80;\n  server_name __DOMAIN__;\n\n  # ACME challenge\n  location ^~ /.well-known/acme-challenge/ { root __WEB_ROOT__; }\n\n  root __WEB_ROOT__;\n  index index.html;\n\n  # SPA\n  location / { try_files $uri $uri/ /index.html; }\n\n  # API proxy\n  location /api/ {\n    proxy_pass http://localhost:3000/api/;\n    proxy_http_version 1.1;\n    proxy_set_header Host $host;\n    proxy_set_header X-Real-IP $remote_addr;\n    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;\n    proxy_set_header X-Forwarded-Proto $scheme;\n  }\n\n  # Media proxy\n  location /media/ {\n    proxy_pass http://localhost:3000/media/;\n    proxy_http_version 1.1;\n    proxy_set_header Host $host;\n    proxy_set_header X-Real-IP $remote_addr;\n    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;\n    proxy_set_header X-Forwarded-Proto $scheme;\n  }\n\n  add_header X-Frame-Options SAMEORIGIN;\n  add_header X-Content-Type-Options nosniff;\n  add_header Referrer-Policy strict-origin-when-cross-origin;\n  add_header X-XSS-Protection '\''1; mode=block'\'';\n}\n'
+
+            # Render \n in CFG and replace placeholders; write atomically
+            printf "%b" "$CFG" \
+              | sed -e "s|__DOMAIN__|$DOMAIN|g" -e "s|__WEB_ROOT__|$WEB_ROOT|g" \
+              | sudo tee /etc/nginx/sites-available/clintonprime-dev >/dev/null
+
+            sudo ln -sf /etc/nginx/sites-available/clintonprime-dev /etc/nginx/sites-enabled/clintonprime-dev
+            sudo nginx -t && sudo systemctl reload nginx
+
+            echo "[5/6] placeholder index (once)"
+            [ -f "${WEB_ROOT}/index.html" ] || echo '<!doctype html><meta charset="utf-8"><title>clintonprime dev</title><h1>dev env up ✅</h1>' | sudo tee "${WEB_ROOT}/index.html" >/dev/null
+            sudo systemctl reload nginx
+
+            echo "[6/6] HTTPS via certbot (auto redirect)"
+            sudo apt-get install -y certbot python3-certbot-nginx
+            sudo certbot --nginx -d "$DOMAIN" --non-interactive --agree-tos -m "$EMAIL" --redirect || true
+            sudo nginx -t && sudo systemctl reload nginx || true
+            sudo ufw allow 'Nginx Full' || true
+
+            sudo mkdir -p "$(dirname "$MARKER")"
+            echo "$(date -Iseconds) bootstrapped" | sudo tee "$MARKER" >/dev/null
+            echo "[bootstrap] done"
+
+      # ---------- DEPLOY ----------
+      - name: Deploy to server and start PM2 (MVP)
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.LIGHTSAIL_HOST_DEV }}
+          username: ${{ secrets.LIGHTSAIL_USER_DEV }}
+          key: ${{ secrets.LIGHTSAIL_SSH_KEY_DEV }}
+          script_stop: true
+          script: |
+            set -euo pipefail
+            WEB_ROOT="${{ env.WEB_ROOT }}"
+            CURRENT_API="${{ env.CURRENT_API }}"
+            PM2_NAME="${{ env.PM2_NAME }}"
+            SHA="${{ github.sha }}"
+            WORK="/tmp/cp-build-${SHA:0:12}"
+            OWNER="$(whoami)"
+            PORT=3000
+            NODE_ENV=production
+            export PORT NODE_ENV
+
+            rm -rf "$WORK"; mkdir -p "$WORK/web" "$WORK/api"
+            tar -xzf /tmp/web-dist.tar.gz -C "$WORK/web"
+            tar -xzf /tmp/api-runtime.tar.gz -C "$WORK/api"
+            rm -f /tmp/web-dist.tar.gz /tmp/api-runtime.tar.gz
+
+            sudo apt-get update -y
+            sudo apt-get install -y rsync curl
+            command -v pm2 >/dev/null 2>&1 || sudo npm i -g pm2
+            export PATH="$(npm config get prefix 2>/dev/null)/bin:/usr/local/bin:$PATH"
+
+            sudo mkdir -p "$WEB_ROOT"
+            sudo rsync -a --delete "$WORK/web/dist/" "$WEB_ROOT/"
+            sudo chown -R www-data:www-data "$WEB_ROOT"
+            command -v nginx >/dev/null 2>&1 && sudo nginx -t && sudo systemctl reload nginx || true
+
+            PRESERVE_ENV="$WORK/.env.keep"
+            [ -f "$CURRENT_API/.env" ] && sudo cp "$CURRENT_API/.env" "$PRESERVE_ENV" || true
+
+            sudo mkdir -p "$CURRENT_API"
+            sudo rsync -a --exclude='.env' --exclude='.env.*' "$WORK/api/" "$CURRENT_API/"
+            sudo chown -R "$OWNER:$OWNER" "$CURRENT_API"
+
+            if [ -f "$PRESERVE_ENV" ]; then
+              sudo install -m 600 -o "$OWNER" -g "$OWNER" "$PRESERVE_ENV" "$CURRENT_API/.env"
+            elif [ ! -f "$CURRENT_API/.env" ] ; then
+              cat > "$WORK/.env.new" <<EOF
+            NODE_ENV=production
+            PORT=3000
+            PUBLIC_BASE_URL=https://dev.clintonprime.com
+            SESSION_SECRET=${{ secrets.SESSION_SECRET_DEV }}
+            SPOTIFY_CLIENT_ID=${{ secrets.SPOTIFY_CLIENT_ID_DEV }}
+            SPOTIFY_CLIENT_SECRET=${{ secrets.SPOTIFY_CLIENT_SECRET_DEV }}
+            SPOTIFY_REDIRECT_URI=https://dev.clintonprime.com/api/spotify/callback
+            SPOTIFY_REFRESH_TOKEN=${{ secrets.SPOTIFY_REFRESH_TOKEN_DEV }}
+            SPOTIFY_ACCESS_TOKEN=${{ secrets.SPOTIFY_ACCESS_TOKEN_DEV }}
+            EOF
+              sudo install -m 600 -o "$OWNER" -g "$OWNER" "$WORK/.env.new" "$CURRENT_API/.env"
+            fi
+
+            ( PORT=$PORT NODE_ENV=$NODE_ENV node "$CURRENT_API/dist/index.js" & echo $! > "$WORK/test.pid" )
+            sleep 2
+            curl -fsS "http://127.0.0.1:$PORT/" >/dev/null || (kill "$(cat "$WORK/test.pid")" 2>/dev/null || true; exit 1)
+            kill "$(cat "$WORK/test.pid")" 2>/dev/null || true
+
+            pm2 delete "$PM2_NAME" >/dev/null 2>&1 || true
+            PORT=$PORT NODE_ENV=$NODE_ENV pm2 start "$CURRENT_API/dist/index.js" --name "$PM2_NAME" --time --cwd "$CURRENT_API"
+            sleep 4
+            pm2 status || true
+            pm2 describe "$PM2_NAME" || true
+            pm2 save || true
