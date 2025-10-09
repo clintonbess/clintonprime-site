@@ -94,6 +94,9 @@ jobs:
             SHA="${{ github.sha }}"
             WORK="/tmp/cp-build-${SHA:0:12}"
             OWNER="$(whoami)"
+            PORT=3000
+            NODE_ENV=production
+            export PORT NODE_ENV
 
             echo "[server] prepare workdir: $WORK"
             rm -rf "$WORK"
@@ -127,32 +130,26 @@ jobs:
             sudo rsync -a --delete "$WORK/api/" "$CURRENT_API/"
             sudo chown -R "$OWNER:$OWNER" "$CURRENT_API"
 
-            echo "[server] preflight: can Node run the API directly?"
-            ( PORT=3101 NODE_ENV=production node "$CURRENT_API/dist/index.js" & echo $! > "$WORK/test.pid" )
+            echo "[server] preflight: run API directly on :$PORT"
+            ( PORT=$PORT NODE_ENV=$NODE_ENV node "$CURRENT_API/dist/index.js" & echo $! > "$WORK/test.pid" )
             sleep 2
-            if ! curl -fsS "http://127.0.0.1:3101/" >/dev/null; then
-              echo "[server] direct node preflight FAILED; printing last 80 lines from syslog (if any) and exiting"
-              kill "$(cat "$WORK/test.pid")" 2>/dev/null || true
-              exit 1
-            fi
+            curl -fsS "http://127.0.0.1:$PORT/" >/dev/null || (echo "[server] direct node preflight FAILED"; kill "$(cat "$WORK/test.pid")" 2>/dev/null || true; exit 1)
             kill "$(cat "$WORK/test.pid")" 2>/dev/null || true
 
-            echo "[server] start PM2 fresh (delete then start) on PORT 3101"
+            echo "[server] start PM2 fresh on :$PORT"
             pm2 delete "$PM2_NAME" >/dev/null 2>&1 || true
-            PORT=3101 NODE_ENV=production pm2 start "$CURRENT_API/dist/index.js" --name "$PM2_NAME" --time
+            PORT=$PORT NODE_ENV=$NODE_ENV pm2 start "$CURRENT_API/dist/index.js" --name "$PM2_NAME" --time
 
             echo "[server] wait and check PM2 status"
             sleep 4
             pm2 status || true
             pm2 describe "$PM2_NAME" || true
-
             if ! pm2 status "$PM2_NAME" | grep -q "online"; then
               echo "[server] pm2 process not online, showing last logs…"
               pm2 logs "$PM2_NAME" --lines 200 --nostream || true
-              # Do not hard-fail the whole deploy while we stabilize. Comment the next line
-              # if you want the workflow to fail when PM2 isn't online.
+              # Keep deploy green while we iterate; flip to `exit 1` to hard-fail.
               # exit 1
             fi
 
             pm2 save || true
-            echo "✅ Deployed web to $WEB_ROOT and API to $CURRENT_API; attempted to start PM2 '$PM2_NAME' on :3101"
+            echo "✅ Deployed web to $WEB_ROOT and API to $CURRENT_API; PM2 '$PM2_NAME' online check performed on :$PORT"
