@@ -19,7 +19,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      # 2) Install pnpm FIRST (reads "packageManager" if present)
+      # 2) Install pnpm (reads "packageManager" if present)
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
         with:
@@ -57,19 +57,35 @@ jobs:
           source: web-dist.tar.gz
           target: /tmp/
 
-      # 7) Deploy Web on server
-      - name: Deploy Web
+      # 7) Deploy Web on server (SAFE: rsync, no rm -rf)
+      - name: Deploy Web (safe)
         uses: appleboy/ssh-action@v1.2.0
         with:
           host: ${{ secrets.LIGHTSAIL_HOST_DEV }}
           username: ${{ secrets.LIGHTSAIL_USER_DEV }}
           key: ${{ secrets.LIGHTSAIL_SSH_KEY_DEV }}
+          script_stop: true
           script: |
-            sudo mkdir -p $WEB_ROOT
-            sudo rm -rf $WEB_ROOT/*
-            sudo tar -xzf /tmp/web-dist.tar.gz -C $WEB_ROOT --strip-components=1
-            sudo chown -R www-data:www-data $WEB_ROOT
+            set -euo pipefail
+            WEB_ROOT="${{ env.WEB_ROOT }}"
+            # Guards
+            if [ -z "$WEB_ROOT" ] || [ "$WEB_ROOT" = "/" ]; then
+              echo "Refusing to operate on WEB_ROOT='$WEB_ROOT'"; exit 1;
+            fi
+
+            sudo apt-get update -y && sudo apt-get install -y rsync
+
+            TMP_DIR="$(mktemp -d)"
+            sudo tar -xzf /tmp/web-dist.tar.gz -C "$TMP_DIR" --strip-components=1
+
+            # Sync new build safely; --delete removes only files inside WEB_ROOT not present in TMP_DIR
+            sudo mkdir -p "$WEB_ROOT"
+            sudo rsync -a --delete "$TMP_DIR"/ "$WEB_ROOT"/
+
+            sudo chown -R www-data:www-data "$WEB_ROOT"
             sudo nginx -t && sudo systemctl reload nginx
+
+            rm -rf "$TMP_DIR" /tmp/web-dist.tar.gz
 
       # 8) Write .env on server (dev)
       - name: Write .env on server (dev)
@@ -78,9 +94,12 @@ jobs:
           host: ${{ secrets.LIGHTSAIL_HOST_DEV }}
           username: ${{ secrets.LIGHTSAIL_USER_DEV }}
           key: ${{ secrets.LIGHTSAIL_SSH_KEY_DEV }}
+          script_stop: true
           script: |
-            mkdir -p $API_REPO_DIR/libs/api
-            cat > $API_REPO_DIR/libs/api/.env << 'EOF'
+            set -euo pipefail
+            API_REPO_DIR="${{ env.API_REPO_DIR }}"
+            sudo mkdir -p "$API_REPO_DIR/libs/api"
+            cat > "$API_REPO_DIR/libs/api/.env" << 'EOF'
             NODE_ENV=production
             PORT=3000
             PUBLIC_BASE_URL=https://dev.clintonprime.com
@@ -102,14 +121,19 @@ jobs:
           host: ${{ secrets.LIGHTSAIL_HOST_DEV }}
           username: ${{ secrets.LIGHTSAIL_USER_DEV }}
           key: ${{ secrets.LIGHTSAIL_SSH_KEY_DEV }}
+          script_stop: true
           script: |
+            set -euo pipefail
+            API_REPO_DIR="${{ env.API_REPO_DIR }}"
+            PM2_NAME="${{ env.PM2_NAME }}"
+
             if [ ! -d "$API_REPO_DIR/.git" ]; then
-              sudo mkdir -p $API_REPO_DIR
-              sudo chown -R $USER:$USER $API_REPO_DIR
-              git clone https://github.com/${{ github.repository }} $API_REPO_DIR
+              sudo mkdir -p "$API_REPO_DIR"
+              sudo chown -R $USER:$USER "$API_REPO_DIR"
+              git clone https://github.com/${{ github.repository }} "$API_REPO_DIR"
             fi
 
-            cd $API_REPO_DIR
+            cd "$API_REPO_DIR"
             git fetch --all --tags
             git checkout -f ${{ github.sha }}
 
@@ -124,5 +148,5 @@ jobs:
             pnpm install
             pnpm build
 
-            pm2 describe $PM2_NAME >/dev/null 2>&1 && pm2 restart $PM2_NAME || pm2 start dist/index.js --name $PM2_NAME
+            pm2 describe "$PM2_NAME" >/dev/null 2>&1 && pm2 restart "$PM2_NAME" || pm2 start dist/index.js --name "$PM2_NAME"
             pm2 save

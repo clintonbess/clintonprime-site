@@ -3,7 +3,7 @@ set -euo pipefail
 
 # ---------- config ----------
 DOMAIN="dev.clintonprime.com"
-EMAIL="clintonbess3@gmail.com"  # <-- change this
+EMAIL="clintonbess3@gmail.com"   # <-- change this
 DEPLOY_USER="ubuntu"
 WEB_ROOT="/var/www/html/clintonprime"
 RELEASES_DIR="/opt/clintonprime-site/releases"
@@ -19,51 +19,48 @@ echo "[2/6] node 20 + pm2 (global)"
 curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
 sudo apt-get install -y nodejs
 sudo npm i -g pm2
-# pm2 boot on restart for ubuntu user
-pm2 startup systemd -u "$DEPLOY_USER" --hp "/home/$DEPLOY_USER" >/dev/null
+# pm2 boot on restart for ubuntu user (non-interactive)
+sudo pm2 startup systemd -u "$DEPLOY_USER" --hp "/home/$DEPLOY_USER" --silent || true
 
 echo "[3/6] filesystem layout"
-sudo mkdir -p "$WEB_ROOT"
-sudo mkdir -p "$RELEASES_DIR"
+sudo mkdir -p "$WEB_ROOT" "$RELEASES_DIR"
 sudo chown -R www-data:www-data "$WEB_ROOT"
-sudo chown -R "$DEPLOY_USER":"$DEPLOY_USER" "$(dirname "$RELEASES_DIR")" "$RELEASES_DIR"
+sudo chown -R "$DEPLOY_USER":"$DEPLOY_USER" "$(dirname "$RELEASES_DIR")" "$RELEASES_DIR" || true
 
-echo "[4/6] nginx site (HTTP only first, for ACME)"
-sudo tee /etc/nginx/sites-available/clintonprime-dev >/dev/null <<NGX
+echo "[4/6] nginx site (HTTP first, for ACME)"
+sudo tee /etc/nginx/sites-available/clintonprime-dev >/dev/null <<'NGX'
 server {
   listen 80;
   listen [::]:80;
-  server_name ${DOMAIN};
+  server_name dev.clintonprime.com;
 
   # ACME challenge
-  location ^~ /.well-known/acme-challenge/ { root ${WEB_ROOT}; }
+  location ^~ /.well-known/acme-challenge/ { root /var/www/html/clintonprime; }
 
-  root ${WEB_ROOT};
+  root /var/www/html/clintonprime;
   index index.html;
 
   # SPA
-  location / {
-    try_files \$uri \$uri/ /index.html;
-  }
+  location / { try_files $uri $uri/ /index.html; }
 
   # API proxy
   location /api/ {
     proxy_pass http://localhost:3000/api/;
     proxy_http_version 1.1;
-    proxy_set_header Host \$host;
-    proxy_set_header X-Real-IP \$remote_addr;
-    proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
-    proxy_set_header X-Forwarded-Proto \$scheme;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
   }
 
   # Media proxy
   location /media/ {
     proxy_pass http://localhost:3000/media/;
     proxy_http_version 1.1;
-    proxy_set_header Host \$host;
-    proxy_set_header X-Real-IP \$remote_addr;
-    proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
-    proxy_set_header X-Forwarded-Proto \$scheme;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
   }
 
   # basic headers
@@ -75,8 +72,8 @@ server {
 NGX
 
 sudo ln -sf /etc/nginx/sites-available/clintonprime-dev /etc/nginx/sites-enabled/clintonprime-dev
-sudo nginx -t
-sudo systemctl reload nginx
+[ -e /etc/nginx/sites-enabled/default ] && sudo rm -f /etc/nginx/sites-enabled/default || true
+sudo nginx -t && sudo systemctl reload nginx
 
 echo "[5/6] placeholder index so you get 200"
 echo '<!doctype html><meta charset="utf-8"><title>clintonprime dev</title><h1>dev env up ✅</h1>' | sudo tee "${WEB_ROOT}/index.html" >/dev/null
@@ -84,9 +81,10 @@ sudo systemctl reload nginx
 
 echo "[6/6] HTTPS via certbot (auto redirect)"
 sudo apt-get install -y certbot python3-certbot-nginx
-sudo certbot --nginx -d "${DOMAIN}" --non-interactive --agree-tos -m "${EMAIL}" --redirect
+sudo certbot --nginx -d "${DOMAIN}" --non-interactive --agree-tos -m "${EMAIL}" --redirect || true
+sudo nginx -t && sudo systemctl reload nginx || true
 
-# Firewall (optional but nice)
+# firewall (optional)
 sudo ufw allow 'Nginx Full' || true
 
 echo "All done 🎉
@@ -95,6 +93,7 @@ echo "All done 🎉
 - Current API symlink: ${CURRENT_API}
 - Nginx site: /etc/nginx/sites-available/clintonprime-dev
 Next:
+- Point dev.clintonprime.com to this instance's static IP (A record)
 - Run your GitHub deploy to publish web and API
 - API will listen on :3000 (proxied at https://${DOMAIN}/api/*)
 "
