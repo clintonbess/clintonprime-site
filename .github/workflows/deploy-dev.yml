@@ -4,7 +4,6 @@ on:
     branches: [dev]
   workflow_dispatch:
 
-# Keep newest run; auto-cancel older ones
 concurrency:
   group: deploy-dev-build-only
   cancel-in-progress: true
@@ -17,7 +16,7 @@ env:
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
-    environment: dev # access environment-scoped SSH secrets
+    environment: dev
 
     steps:
       - name: Checkout
@@ -33,7 +32,7 @@ jobs:
         with:
           node-version: 20
 
-      # ---------- WEB (build on runner) ----------
+      # ---------- WEB ----------
       - name: Install & Build Web
         working-directory: apps/web
         run: |
@@ -44,7 +43,7 @@ jobs:
       - name: Package Web Dist
         run: tar -C apps/web -czf web-dist.tar.gz dist
 
-      # ---------- API (build on runner; ship runtime-ready) ----------
+      # ---------- API ----------
       - name: Install & Build API
         working-directory: libs/api
         run: |
@@ -67,7 +66,7 @@ jobs:
           [ -n "${{ secrets.LIGHTSAIL_USER_DEV }}" ] || (echo "LIGHTSAIL_USER_DEV missing" && exit 1)
           [ -n "${{ secrets.LIGHTSAIL_SSH_KEY_DEV }}" ] || (echo "LIGHTSAIL_SSH_KEY_DEV missing" && exit 1)
 
-      # ---------- UPLOAD TO SERVER /tmp ----------
+      # ---------- UPLOAD ----------
       - name: Upload archives to server (/tmp)
         uses: appleboy/scp-action@v1
         with:
@@ -78,7 +77,7 @@ jobs:
           target: /tmp/
           debug: true
 
-      # ---------- DEPLOY (copy web to WEB_ROOT, copy api to CURRENT_API, write .env, start PM2) ----------
+      # ---------- DEPLOY ----------
       - name: Deploy to server and start PM2 (MVP)
         uses: appleboy/ssh-action@v1.2.0
         with:
@@ -114,7 +113,6 @@ jobs:
               sudo npm i -g pm2
             fi
             export PATH="$(npm config get prefix 2>/dev/null)/bin:/usr/local/bin:$PATH"
-            echo "[server] pm2 path: $(command -v pm2 || echo 'not found')"
 
             echo "[server] deploy web -> $WEB_ROOT"
             sudo mkdir -p "$WEB_ROOT"
@@ -124,44 +122,40 @@ jobs:
               sudo nginx -t && sudo systemctl reload nginx || true
             fi
 
-            echo "[server] deploy api -> $CURRENT_API"
+            echo "[server] check existing env before API deploy"
+            ENV_EXISTED=false
+            if [ -f "$CURRENT_API/.env" ]; then
+              ENV_EXISTED=true
+              cp "$CURRENT_API/.env" "$WORK/env.prev"
+              echo "[server] found existing .env, will preserve it"
+            fi
+
+            echo "[server] deploy api -> $CURRENT_API (preserve .env)"
             sudo mkdir -p "$CURRENT_API"
-            sudo rsync -a --delete "$WORK/api/" "$CURRENT_API/"
+            # EXCLUDE .env so it stays intact
+            sudo rsync -a --delete --exclude='.env' "$WORK/api/" "$CURRENT_API/"
             sudo chown -R "$OWNER:$OWNER" "$CURRENT_API"
 
-            echo "[server] build .env (reuse existing tokens if secrets are blank)"
-            # pull tokens from secrets first
-            REF_SEC="${{ secrets.SPOTIFY_REFRESH_TOKEN_DEV }}"
-            ACC_SEC="${{ secrets.SPOTIFY_ACCESS_TOKEN_DEV }}"
-            REF_VAL="$REF_SEC"
-            ACC_VAL="$ACC_SEC"
-            # fallback to existing file values if secrets empty
-            if [ -z "$REF_VAL" ] && [ -f "$CURRENT_API/.env" ]; then
-              REF_VAL="$(sed -n 's/^SPOTIFY_REFRESH_TOKEN=//p' "$CURRENT_API/.env" | head -n1 || true)"
-              [ -n "$REF_VAL" ] && echo "[server] reusing existing SPOTIFY_REFRESH_TOKEN"
-            fi
-            if [ -z "$ACC_VAL" ] && [ -f "$CURRENT_API/.env" ]; then
-              ACC_VAL="$(sed -n 's/^SPOTIFY_ACCESS_TOKEN=//p' "$CURRENT_API/.env" | head -n1 || true)"
-              [ -n "$ACC_VAL" ] && echo "[server] reusing existing SPOTIFY_ACCESS_TOKEN"
-            fi
+            # Create .env only if it doesn't already exist
+            if [ "$ENV_EXISTED" = false ]; then
+              echo "[server] writing new .env to $CURRENT_API"
+              cat > "$CURRENT_API/.env" <<EOF
+            NODE_ENV=production
+            PORT=3000
+            PUBLIC_BASE_URL=https://dev.clintonprime.com
 
-            # write merged env atomically
-            ENV_TMP="$WORK/.env.tmp"
-            {
-              echo "NODE_ENV=production"
-              echo "PORT=3000"
-              echo "PUBLIC_BASE_URL=https://dev.clintonprime.com"
-              echo
-              echo "SESSION_SECRET=${{ secrets.SESSION_SECRET_DEV }}"
-              echo
-              echo "SPOTIFY_CLIENT_ID=${{ secrets.SPOTIFY_CLIENT_ID_DEV }}"
-              echo "SPOTIFY_CLIENT_SECRET=${{ secrets.SPOTIFY_CLIENT_SECRET_DEV }}"
-              echo "SPOTIFY_REDIRECT_URI=https://dev.clintonprime.com/api/spotify/callback"
-              echo "SPOTIFY_REFRESH_TOKEN=${REF_VAL}"
-              echo "SPOTIFY_ACCESS_TOKEN=${ACC_VAL}"
-            } > "$ENV_TMP"
-            mv "$ENV_TMP" "$CURRENT_API/.env"
-            chmod 600 "$CURRENT_API/.env"
+            SESSION_SECRET=${{ secrets.SESSION_SECRET_DEV }}
+
+            SPOTIFY_CLIENT_ID=${{ secrets.SPOTIFY_CLIENT_ID_DEV }}
+            SPOTIFY_CLIENT_SECRET=${{ secrets.SPOTIFY_CLIENT_SECRET_DEV }}
+            SPOTIFY_REDIRECT_URI=https://dev.clintonprime.com/api/spotify/callback
+            SPOTIFY_REFRESH_TOKEN=${{ secrets.SPOTIFY_REFRESH_TOKEN_DEV }}
+            SPOTIFY_ACCESS_TOKEN=${{ secrets.SPOTIFY_ACCESS_TOKEN_DEV }}
+            EOF
+              chmod 600 "$CURRENT_API/.env"
+            else
+              echo "[server] keeping existing .env (no overwrite)"
+            fi
 
             echo "[server] preflight: run API directly on :$PORT"
             ( PORT=$PORT NODE_ENV=$NODE_ENV node "$CURRENT_API/dist/index.js" & echo $! > "$WORK/test.pid" )
@@ -180,9 +174,8 @@ jobs:
             if ! pm2 status "$PM2_NAME" | grep -q "online"; then
               echo "[server] pm2 process not online, showing last logs…"
               pm2 logs "$PM2_NAME" --lines 200 --nostream || true
-              # Uncomment to hard-fail if PM2 isn't online:
-              # exit 1
+              # exit 1  # uncomment to hard-fail if you want
             fi
 
             pm2 save || true
-            echo "✅ Deployed web to $WEB_ROOT, merged $CURRENT_API/.env (tokens preserved), and PM2 '$PM2_NAME' started on :$PORT"
+            echo "✅ Deployed web to $WEB_ROOT, preserved $CURRENT_API/.env when present, and PM2 '$PM2_NAME' started on :$PORT"
