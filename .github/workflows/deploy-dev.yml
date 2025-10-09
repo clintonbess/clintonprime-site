@@ -122,54 +122,14 @@ jobs:
             sudo chown -R www-data:www-data "$WEB_ROOT"
             sudo chown -R "$DEPLOY_USER":"$DEPLOY_USER" "$(dirname "$RELEASES_DIR")" "$RELEASES_DIR" "$(dirname "$CURRENT_API")" || true
 
-            echo "[4/6] nginx site (template -> sed -> tee)"
+            echo "[4/6] nginx site (printf -> sed -> tee; no heredoc)"
             # remove any corrupted file from previous runs
             sudo rm -f /etc/nginx/sites-available/clintonprime-dev /etc/nginx/sites-enabled/clintonprime-dev || true
 
-            cat >/tmp/clintonprime-dev.tmpl <<'NGX'
-            server {
-              listen 80;
-              listen [::]:80;
-              server_name __DOMAIN__;
+            CFG='server {\n  listen 80;\n  listen [::]:80;\n  server_name __DOMAIN__;\n\n  # ACME challenge\n  location ^~ /.well-known/acme-challenge/ { root __WEB_ROOT__; }\n\n  root __WEB_ROOT__;\n  index index.html;\n\n  # SPA\n  location / { try_files \\$uri \\$uri/ /index.html; }\n\n  # API proxy\n  location /api/ {\n    proxy_pass http://localhost:3000/api/;\n    proxy_http_version 1.1;\n    proxy_set_header Host \\$host;\n    proxy_set_header X-Real-IP \\$remote_addr;\n    proxy_set_header X-Forwarded-For \\$proxy_add_x_forwarded_for;\n    proxy_set_header X-Forwarded-Proto \\$scheme;\n  }\n\n  # Media proxy\n  location /media/ {\n    proxy_pass http://localhost:3000/media/;\n    proxy_http_version 1.1;\n    proxy_set_header Host \\$host;\n    proxy_set_header X-Real-IP \\$remote_addr;\n    proxy_set_header X-Forwarded-For \\$proxy_add_x_forwarded_for;\n    proxy_set_header X-Forwarded-Proto \\$scheme;\n  }\n\n  add_header X-Frame-Options \"SAMEORIGIN\";\n  add_header X-Content-Type-Options \"nosniff\";\n  add_header Referrer-Policy \"strict-origin-when-cross-origin\";\n  add_header X-XSS-Protection \"1; mode=block\";\n}\n'
 
-              # ACME challenge
-              location ^~ /.well-known/acme-challenge/ { root __WEB_ROOT__; }
-
-              root __WEB_ROOT__;
-              index index.html;
-
-              # SPA
-              location / { try_files \$uri \$uri/ /index.html; }
-
-              # API proxy
-              location /api/ {
-                proxy_pass http://localhost:3000/api/;
-                proxy_http_version 1.1;
-                proxy_set_header Host \$host;
-                proxy_set_header X-Real-IP \$remote_addr;
-                proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
-                proxy_set_header X-Forwarded-Proto \$scheme;
-              }
-
-              # Media proxy
-              location /media/ {
-                proxy_pass http://localhost:3000/media/;
-                proxy_http_version 1.1;
-                proxy_set_header Host \$host;
-                proxy_set_header X-Real-IP \$remote_addr;
-                proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
-                proxy_set_header X-Forwarded-Proto \$scheme;
-              }
-
-              add_header X-Frame-Options "SAMEORIGIN";
-              add_header X-Content-Type-Options "nosniff";
-              add_header Referrer-Policy "strict-origin-when-cross-origin";
-              add_header X-XSS-Protection "1; mode=block";
-            }
-            NGX
-
-            # Safely substitute placeholders and write via tee (avoids wrapper text in file)
-            sed -e "s|__DOMAIN__|$DOMAIN|g" -e "s|__WEB_ROOT__|$WEB_ROOT|g" /tmp/clintonprime-dev.tmpl \
+            printf "%b" "$CFG" \
+              | sed -e "s|__DOMAIN__|$DOMAIN|g" -e "s|__WEB_ROOT__|$WEB_ROOT|g" \
               | sudo tee /etc/nginx/sites-available/clintonprime-dev >/dev/null
 
             sudo ln -sf /etc/nginx/sites-available/clintonprime-dev /etc/nginx/sites-enabled/clintonprime-dev
@@ -189,7 +149,7 @@ jobs:
             echo "$(date -Iseconds) bootstrapped" | sudo tee "$MARKER" >/dev/null
             echo "[bootstrap] done"
 
-      # ---------- DEPLOY (unchanged from before) ----------
+      # ---------- DEPLOY ----------
       - name: Deploy to server and start PM2 (MVP)
         uses: appleboy/ssh-action@v1.2.0
         with:
@@ -233,7 +193,7 @@ jobs:
 
             if [ -f "$PRESERVE_ENV" ]; then
               sudo install -m 600 -o "$OWNER" -g "$OWNER" "$PRESERVE_ENV" "$CURRENT_API/.env"
-            elif [ ! -f "$CURRENT_API/.env" ]; then
+            elif [ ! -f "$CURRENT_API/.env" ] ; then
               cat > "$WORK/.env.new" <<EOF
             NODE_ENV=production
             PORT=3000
