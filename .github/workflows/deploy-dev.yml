@@ -6,7 +6,7 @@ on:
 
 env:
   WEB_ROOT: /var/www/html/clintonprime
-  API_REPO_DIR: /opt/clintonprime-site
+  API_REPO_DIR: /opt/clintonprime-site/repo # <-- dedicated repo folder
   PM2_NAME: clintonprime-api-dev
 
 jobs:
@@ -15,39 +15,28 @@ jobs:
     environment: dev
 
     steps:
-      # 1) Checkout
       - name: Checkout
         uses: actions/checkout@v4
 
-      # 2) Install pnpm (reads "packageManager" if present)
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
         with:
           run_install: false
 
-      - name: pnpm version
-        run: |
-          pnpm -v
-          which pnpm
-
-      # 3) Setup Node (no pnpm cache since no lockfile)
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
           node-version: 20
 
-      # 4) Build Frontend
       - name: Build Web
         working-directory: apps/web
         run: |
           pnpm install
           pnpm build
 
-      # 5) Package Frontend
       - name: Package Web
         run: tar -C apps/web -czf web-dist.tar.gz dist
 
-      # 6) Upload Web to server
       - name: Upload Web
         uses: appleboy/scp-action@v0.1.7
         with:
@@ -57,7 +46,6 @@ jobs:
           source: web-dist.tar.gz
           target: /tmp/
 
-      # 7) Deploy Web (safe)
       - name: Deploy Web (safe)
         uses: appleboy/ssh-action@v1.2.0
         with:
@@ -68,24 +56,20 @@ jobs:
           script: |
             set -euo pipefail
             WEB_ROOT="${{ env.WEB_ROOT }}"
-            if [ -z "$WEB_ROOT" ] || [ "$WEB_ROOT" = "/" ]; then
-              echo "Refusing to operate on WEB_ROOT='$WEB_ROOT'"; exit 1;
-            fi
+            [ -n "$WEB_ROOT" ] && [ "$WEB_ROOT" != "/" ] || { echo "Bad WEB_ROOT='$WEB_ROOT'"; exit 1; }
 
             sudo apt-get update -y && sudo apt-get install -y rsync
 
             TMP_DIR="$(mktemp -d)"
-            tar -xzf /tmp/web-dist.tar.gz -C "$TMP_DIR" --strip-components=1   # <— no sudo here
+            tar -xzf /tmp/web-dist.tar.gz -C "$TMP_DIR" --strip-components=1   # no sudo → owned by ubuntu
 
             sudo mkdir -p "$WEB_ROOT"
             sudo rsync -a --delete "$TMP_DIR"/ "$WEB_ROOT"/
-
             sudo chown -R www-data:www-data "$WEB_ROOT"
             sudo nginx -t && sudo systemctl reload nginx
 
             rm -rf "$TMP_DIR" /tmp/web-dist.tar.gz
 
-      # 8) Write .env on server (dev)
       - name: Write .env on server (dev)
         uses: appleboy/ssh-action@v1.2.0
         with:
@@ -96,12 +80,9 @@ jobs:
           script: |
             set -euo pipefail
             API_REPO_DIR="${{ env.API_REPO_DIR }}"
-
-            # Create path as root, then hand ownership to current user
             sudo mkdir -p "$API_REPO_DIR/libs/api"
             sudo chown -R $USER:$USER "$API_REPO_DIR"
 
-            # Now write .env as the user
             cat > "$API_REPO_DIR/libs/api/.env" << 'EOF'
             NODE_ENV=production
             PORT=3000
@@ -117,8 +98,7 @@ jobs:
             SPOTIFY_ACCESS_TOKEN=${{ secrets.SPOTIFY_ACCESS_TOKEN_DEV || '' }}
             EOF
 
-      # 9) Deploy API (git pull + build + pm2 restart)
-      - name: Deploy API
+      - name: Deploy API (clone/init safely + pm2 restart)
         uses: appleboy/ssh-action@v1.2.0
         with:
           host: ${{ secrets.LIGHTSAIL_HOST_DEV }}
@@ -129,24 +109,36 @@ jobs:
             set -euo pipefail
             API_REPO_DIR="${{ env.API_REPO_DIR }}"
             PM2_NAME="${{ env.PM2_NAME }}"
+            REPO_URL="https://github.com/${{ github.repository }}"
 
-            if [ ! -d "$API_REPO_DIR/.git" ]; then
-              sudo mkdir -p "$API_REPO_DIR"
-              sudo chown -R $USER:$USER "$API_REPO_DIR"
-              git clone https://github.com/${{ github.repository }} "$API_REPO_DIR"
+            sudo mkdir -p "$API_REPO_DIR"
+            sudo chown -R $USER:$USER "$API_REPO_DIR"
+
+            if [ -d "$API_REPO_DIR/.git" ]; then
+              echo "Repo exists; fetching"
+              cd "$API_REPO_DIR"
+              git fetch --all --tags
+            else
+              if [ "$(ls -A "$API_REPO_DIR" 2>/dev/null | wc -l)" -gt 0 ]; then
+                echo "Dir exists and not a git repo; initializing in place"
+                cd "$API_REPO_DIR"
+                git init
+                git remote add origin "$REPO_URL" || git remote set-url origin "$REPO_URL"
+                git fetch --all --tags
+              else
+                echo "Cloning fresh"
+                git clone "$REPO_URL" "$API_REPO_DIR"
+                cd "$API_REPO_DIR"
+              fi
             fi
 
-            cd "$API_REPO_DIR"
-            git fetch --all --tags
             git checkout -f ${{ github.sha }}
 
-            # Ensure pnpm on the server
+            # Ensure pnpm
             if ! command -v pnpm >/dev/null 2>&1; then
               corepack enable || true
               corepack prepare pnpm@9 --activate || npm i -g pnpm@9
             fi
-            pnpm -v
-
             cd libs/api
             pnpm install
             pnpm build
