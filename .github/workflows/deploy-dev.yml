@@ -37,6 +37,14 @@ jobs:
           node-version: 20
 
       # ---------- WEB ----------
+      - name: Install & Build Types (shared package)
+        working-directory: libs/types
+        run: |
+          pnpm install
+          pnpm build
+          ls -lah dist
+          test -f dist/index.js
+
       - name: Install & Build Web
         working-directory: apps/web
         run: |
@@ -53,6 +61,11 @@ jobs:
         run: |
           pnpm install
           pnpm build
+          # Vendor @clintonprime/types into node_modules for runtime
+          mkdir -p node_modules/@clintonprime/types
+          cp -r ../../libs/types/dist node_modules/@clintonprime/types/
+          cp ../../libs/types/package.json node_modules/@clintonprime/types/package.json
+          ls -lah node_modules/@clintonprime/types
           ls -lah dist
           test -f dist/index.js
 
