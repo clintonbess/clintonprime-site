@@ -146,8 +146,9 @@ export function DesktopEnvironment() {
       : "clintonprime OS";
   }, [activeWindow]);
 
-  const openWindow = (key: "music" | "programming" | "quantum" | "readme") =>
-    setActiveWindow((prev) => (prev === key ? null : key));
+  const openWindow = (
+    key: "music" | "programming" | "quantum" | "readme" | "explorer"
+  ) => setActiveWindow((prev) => (prev === key ? null : key));
 
   const closeWindow = () => setActiveWindow(null);
 
