@@ -354,3 +354,77 @@ body {
 .glow-accent {
   animation: glow 2s ease-in-out infinite alternate;
 }
+/* === Glassy Scrollbars — 1.4x Width, No Arrows, Auto-Hide === */
+
+/* Firefox support */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(150, 150, 150, 0.35) rgba(30, 30, 30, 0.25);
+}
+
+/* WebKit browsers */
+::-webkit-scrollbar {
+  width: 14px; /* increased from 10px */
+  height: 14px; /* matches horizontal bar */
+  background: transparent;
+}
+
+/* Track (background) */
+::-webkit-scrollbar-track {
+  background: rgba(30, 30, 30, 0.25);
+  border-radius: 10px;
+  backdrop-filter: blur(2px);
+}
+
+/* Thumb (draggable) */
+::-webkit-scrollbar-thumb {
+  background: linear-gradient(
+    to bottom,
+    rgba(255, 255, 255, 0.15),
+    rgba(255, 255, 255, 0.05)
+  );
+  border-radius: 10px;
+  border: 2px solid rgba(30, 30, 30, 0.25);
+  transition: opacity 0.3s ease, background 0.3s ease;
+  opacity: 0; /* hidden by default */
+}
+
+/* Fade in on hover */
+:hover::-webkit-scrollbar-thumb {
+  opacity: 1;
+}
+
+/* Hover gloss */
+::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(
+    to bottom,
+    rgba(255, 255, 255, 0.25),
+    rgba(255, 255, 255, 0.08)
+  );
+}
+
+/* Remove arrow buttons completely */
+::-webkit-scrollbar-button {
+  display: none !important;
+  width: 0 !important;
+  height: 0 !important;
+  background: none !important;
+  content: none !important;
+  appearance: none !important;
+}
+
+/* Hide bottom-right filler */
+::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+/* For thinner variant (sidebars/modals) */
+.scroll-thin::-webkit-scrollbar {
+  width: 11px; /* scaled proportionally */
+}
+.scroll-thin::-webkit-scrollbar-thumb {
+  opacity: 0;
+}
+.scroll-thin:hover::-webkit-scrollbar-thumb {
+  opacity: 1;
+}

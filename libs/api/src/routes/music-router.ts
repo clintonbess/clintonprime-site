@@ -3,7 +3,7 @@ import fs from "fs";
 import path from "path";
 import { parseFile } from "music-metadata";
 import { __dirname } from "../utils/env-path.js";
-
+import { TracksResponseSchema, MusicTrack, TEST } from "@clintonprime/types";
 const router = express.Router();
 const mediaDir = path.join(__dirname, "../../public/media");
 
@@ -11,7 +11,7 @@ const mediaDir = path.join(__dirname, "../../public/media");
 router.get("/tracks", async (_req, res) => {
   try {
     const files = fs.readdirSync(mediaDir).filter((f) => f.endsWith(".mp3"));
-    const tracks = [];
+    const tracks: MusicTrack[] = [];
 
     for (const file of files) {
       const fullPath = path.join(mediaDir, file);
@@ -29,7 +29,17 @@ router.get("/tracks", async (_req, res) => {
       });
     }
 
-    res.json({ tracks });
+    const response = { tracks };
+    const parseResult = TracksResponseSchema.safeParse(response);
+    if (!parseResult.success) {
+      console.error(
+        "/tracks response validation failed",
+        parseResult.error.format()
+      );
+      return res.status(500).json({ error: "Invalid response shape" });
+    }
+
+    res.json(parseResult.data);
   } catch (err) {
     console.error("Error reading tracks:", err);
     res.status(500).json({ error: "Failed to read tracks" });
@@ -40,7 +50,6 @@ router.get("/tracks", async (_req, res) => {
 router.get("/cover/:filename", async (req, res) => {
   try {
     const file = decodeURIComponent(req.params.filename);
-    console.log(file);
     const fullPath = path.join(mediaDir, file);
 
     if (!fs.existsSync(fullPath)) return res.status(404).send("File not found");

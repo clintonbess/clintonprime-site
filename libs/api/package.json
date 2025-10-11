@@ -5,7 +5,7 @@
   "type": "module",
   "main": "index.js",
   "scripts": {
-    "dev": "tsx watch src/index.ts",
+    "dev": "NODE_OPTIONS=--conditions=development tsx watch src/index.ts",
     "start": "node dist/index.js",
     "build": "tsc"
   },
@@ -13,6 +13,7 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "@clintonprime/types": "workspace:*",
     "2": "^3.0.0",
     "@types/express": "^5.0.3",
     "@types/morgan": "^1.9.10",

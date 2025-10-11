@@ -2,7 +2,12 @@ import express, { Request, Response, NextFunction } from "express";
 import querystring from "querystring";
 import SpotifyWebApi from "spotify-web-api-node";
 import axios from "axios";
-import { resolveEnvPath } from "../utils/env-path.js";
+import {
+  SpotifyNowSchema,
+  RecentTracksResponseSchema,
+  type SpotifyNow,
+  type RecentTrack,
+} from "@clintonprime/types";
 import {
   getAccessToken,
   getRefreshToken,
@@ -113,33 +118,61 @@ router.get("/current", async (_req, res) => {
     if (!track) {
       const recent = await spotifyApi.getMyRecentlyPlayedTracks({ limit: 1 });
       const last = recent.body.items[0].track;
-      return res.json({
+      const payload: SpotifyNow = {
         name: last.name,
         artist: last.artists.map((a: any) => a.name).join(", "),
-        albumArt: last.album.images[0].url,
+        albumArt: last.album?.images?.[0]?.url,
         isPlaying: false,
-      });
+        url: last.external_urls?.spotify,
+      };
+      const parsed = SpotifyNowSchema.safeParse(payload);
+      if (!parsed.success) {
+        console.error(
+          "/spotify/current validation failed",
+          parsed.error.format()
+        );
+        return res.status(500).json({ error: "Invalid response shape" });
+      }
+      return res.json(parsed.data);
     }
 
     // Handle both music tracks and podcast episodes
     if ("artists" in track) {
-      return res.json({
+      const payload: SpotifyNow = {
         name: (track as any).name,
         artist: (track as any).artists.map((a: any) => a.name).join(", "),
         albumArt: (track as any).album?.images?.[0]?.url,
         isPlaying: playback.body.is_playing,
         url: (track as any).external_urls?.spotify,
-      });
+      };
+      const parsed = SpotifyNowSchema.safeParse(payload);
+      if (!parsed.success) {
+        console.error(
+          "/spotify/current validation failed",
+          parsed.error.format()
+        );
+        return res.status(500).json({ error: "Invalid response shape" });
+      }
+      return res.json(parsed.data);
     } else {
       // EpisodeObject
       const episode: any = track as any;
-      return res.json({
+      const payload: SpotifyNow = {
         name: episode.name,
         artist: episode.show?.name ?? "Podcast",
         albumArt: episode.images?.[0]?.url ?? episode.show?.images?.[0]?.url,
         isPlaying: playback.body.is_playing,
         url: episode.external_urls?.spotify,
-      });
+      };
+      const parsed = SpotifyNowSchema.safeParse(payload);
+      if (!parsed.success) {
+        console.error(
+          "/spotify/current validation failed",
+          parsed.error.format()
+        );
+        return res.status(500).json({ error: "Invalid response shape" });
+      }
+      return res.json(parsed.data);
     }
   } catch (err) {
     console.error("Spotify error:", err);
@@ -149,12 +182,10 @@ router.get("/current", async (_req, res) => {
 
 router.get("/recent", async (_req, res) => {
   try {
-    console.log("Fetching recent tracks");
-
     // Fetch last 5 recently played tracks
     const recent = await spotifyApi.getMyRecentlyPlayedTracks({ limit: 5 });
 
-    const tracks = recent.body.items.map((item) => {
+    const tracks: RecentTrack[] = recent.body.items.map((item) => {
       const track = item.track;
       return {
         id: track.id,
@@ -173,7 +204,13 @@ router.get("/recent", async (_req, res) => {
       };
     });
 
-    res.json({ tracks });
+    const response = { tracks };
+    const parsed = RecentTracksResponseSchema.safeParse(response);
+    if (!parsed.success) {
+      console.error("/spotify/recent validation failed", parsed.error.format());
+      return res.status(500).json({ error: "Invalid response shape" });
+    }
+    res.json(parsed.data);
   } catch (err: any) {
     console.error("Spotify recent error:", err.response?.data || err.message);
     res.status(500).json({ error: "Failed to fetch recent tracks" });
@@ -181,9 +218,6 @@ router.get("/recent", async (_req, res) => {
 });
 
 export default router;
-import fs from "fs";
-
-const envPath = resolveEnvPath(process.cwd()) || "./.env";
 
 async function ensureSpotifyAuth(
   _req: Request,
@@ -226,5 +260,3 @@ async function ensureSpotifyAuth(
     });
   }
 }
-
-// Removed local env read/write helpers in favor of spotify-refresh service

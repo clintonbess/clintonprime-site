@@ -21,7 +21,6 @@ function saveEnvVar(key: string, value: string) {
       env += `\n${key}=${value}`;
     }
     fs.writeFileSync(envPath, env);
-    console.log(`Saved ${key} to .env`);
   } catch (err) {
     console.warn(`Could not persist ${key}:`, err);
   }
@@ -84,7 +83,6 @@ export async function refreshAccessTokenNow() {
       refreshToken = newRefresh;
       saveEnvVar("SPOTIFY_REFRESH_TOKEN", newRefresh);
     }
-    console.log("Spotify token refreshed:", new Date().toISOString());
   } catch (err: any) {
     console.error(
       "Spotify token refresh failed:",
