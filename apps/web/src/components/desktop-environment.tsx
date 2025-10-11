@@ -13,6 +13,9 @@ import { QuantumWindow } from "./quantum-window";
 import { ProgrammingWindow } from "./programming-window";
 import { MusicWindow } from "./music-window";
 import { ReadmeWindow } from "./readme-window";
+import { FileExplorerWindow } from "./file-explorer-window";
+import { faFolder } from "@fortawesome/free-solid-svg-icons";
+
 import SpotifyWidget from "./widgets/spotify-widget";
 
 /* Global Music Player Dock (bottom-left corner) */
@@ -126,7 +129,7 @@ export function MusicPlayerDock({ currentTrack }: { currentTrack: any }) {
 /* Desktop Environment */
 export function DesktopEnvironment() {
   const [activeWindow, setActiveWindow] = useState<
-    "music" | "programming" | "quantum" | "readme" | null
+    "music" | "programming" | "quantum" | "readme" | "explorer" | null
   >(null);
 
   const [currentTrack, setCurrentTrack] = useState<any>(null);
@@ -176,6 +179,13 @@ export function DesktopEnvironment() {
       icon: faAtom,
       color: "text-monokai-purple",
       ring: "ring-monokai-purple",
+    },
+    {
+      id: "explorer",
+      label: "File Explorer",
+      icon: faFolder,
+      color: "text-monokai-blue",
+      ring: "ring-monokai-blue",
     },
   ] as const;
 
@@ -271,7 +281,9 @@ export function DesktopEnvironment() {
         <MusicWindow onClose={closeWindow} onSelectTrack={setCurrentTrack} />
       )}
       {activeWindow === "quantum" && <QuantumWindow onClose={closeWindow} />}
-
+      {activeWindow === "explorer" && (
+        <FileExplorerWindow onClose={closeWindow} />
+      )}
       {/* Global Music Player Dock */}
       <MusicPlayerDock currentTrack={currentTrack} />
     </div>
