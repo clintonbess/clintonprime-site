@@ -61,10 +61,13 @@ jobs:
         run: |
           pnpm install
           pnpm build
-          # Vendor @clintonprime/types into node_modules for runtime
-          mkdir -p node_modules/@clintonprime/types
-          cp -r ../../libs/types/dist node_modules/@clintonprime/types/
+          # Vendor @clintonprime/types into node_modules for runtime (replace workspace symlink)
+          rm -rf node_modules/@clintonprime/types
+          mkdir -p node_modules/@clintonprime/types/dist
+          cp -r ../../libs/types/dist/. node_modules/@clintonprime/types/dist/
           cp ../../libs/types/package.json node_modules/@clintonprime/types/package.json
+          # Optional: include top-level type declarations if referenced
+          if [ -f ../../libs/types/index.d.ts ]; then cp ../../libs/types/index.d.ts node_modules/@clintonprime/types/index.d.ts; fi
           ls -lah node_modules/@clintonprime/types
           ls -lah dist
           test -f dist/index.js
