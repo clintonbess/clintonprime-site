@@ -66,6 +66,14 @@ jobs:
           node -e "const fs=require('fs');const p=JSON.parse(fs.readFileSync('package.orig.json','utf8'));p.dependencies=p.dependencies||{};if(p.dependencies['@clintonprime/types']){p.dependencies['@clintonprime/types']='file:../../libs/types';}fs.writeFileSync('package.json',JSON.stringify(p,null,2));"
           rm -rf node_modules package-lock.json
           npm i --omit=dev
+          # If npm created a symlink for @clintonprime/types, replace it with a real directory
+          if [ -L node_modules/@clintonprime/types ]; then \
+            rm -rf node_modules/@clintonprime/types; \
+            mkdir -p node_modules/@clintonprime/types; \
+            cp -r ../../libs/types/dist/. node_modules/@clintonprime/types/; \
+            cp ../../libs/types/package.json node_modules/@clintonprime/types/package.json; \
+            if [ -f ../../libs/types/index.d.ts ]; then cp ../../libs/types/index.d.ts node_modules/@clintonprime/types/index.d.ts; fi; \
+          fi
           mv -f package.orig.json package.json
           ls -lah dist
           test -f dist/index.js
