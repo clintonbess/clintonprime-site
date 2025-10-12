@@ -19,7 +19,7 @@
     "check:tsprune": "ts-prune -p tsconfig.json",
     "check:unused": "ts-unused-exports tsconfig.json",
     "check:deps": "depcheck --skip-missing=true",
-    "check:deadcode": "pnpm -r -c run build && pnpm check:knip && pnpm check:tsprune && pnpm check:unused"
+    "check:deadcode": "pnpm -r run build && pnpm check:knip && pnpm check:tsprune && pnpm check:unused"
   },
   "keywords": [],
   "author": "",
