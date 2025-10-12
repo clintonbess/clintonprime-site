@@ -1,0 +1,12 @@
+name: quality
+on: [pull_request]
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v3
+        with: { version: 9 }
+      - run: pnpm i --frozen-lockfile
+      - run: pnpm -r run build
+      - run: pnpm run check:deadcode

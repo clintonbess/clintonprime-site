@@ -9,7 +9,7 @@ import type {
 import { Kernel } from "../kernel/kernel";
 // import { normalizeMp3File } from "../kernel/fs/audio-normalize"; // reserved for local file inputs
 import { GridView, ListView, type FsViewItem } from "../components/fs/fs-views";
-import type { NeoAudioFileDescriptor } from "../kernel/types/neo-file";
+import type { osFile } from "@clintonprime/types";
 import { useSelection } from "../hooks/use-selection";
 
 type FileItem =
@@ -468,7 +468,7 @@ export function FileExplorerWindow({
                   kind: file?.kind,
                 });
                 if (file?.kind === "neo/audio" && typeof url === "string") {
-                  const desc: NeoAudioFileDescriptor = {
+                  const desc: osFile.NeoAudioFileDescriptor = {
                     type: "neo/audio",
                     name: file.name,
                     mime: "audio/mpeg",
@@ -535,7 +535,7 @@ export function FileExplorerWindow({
                   kind: file?.kind,
                 });
                 if (file?.kind === "neo/audio" && typeof url === "string") {
-                  const desc: NeoAudioFileDescriptor = {
+                  const desc: osFile.NeoAudioFileDescriptor = {
                     type: "neo/audio",
                     name: file.name,
                     mime: "audio/mpeg",

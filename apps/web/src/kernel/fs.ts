@@ -1,37 +1,36 @@
-import type { NeoFS, NeoFileDescriptor } from "./types";
+import type { NeoFS } from "./types";
+import type { osFile } from "@clintonprime/types";
 
 export function createAudioFS(): NeoFS {
   return {
     audio: {
-      async fromLocalFile(file: File): Promise<NeoFileDescriptor> {
+      async fromLocalFile(file: File): Promise<osFile.NeoAudioFileDescriptor> {
         // Support either .mp3 or a tiny .neoaudio.json bundle
         if (file.name.endsWith(".neoaudio.json")) {
           const text = await file.text();
           const obj = JSON.parse(text);
           // Expect shape: { name, url } (url can be data: or remote)
           return {
-            id: crypto.randomUUID(),
-            name: obj.name ?? file.name,
             type: "neo/audio",
-            meta: obj,
+            name: obj.name ?? file.name,
+            mime: "audio/mpeg",
+            size: 0,
             blobUrl: obj.url,
-            cached: true,
+            meta: obj,
           };
         }
 
         // default: raw mp3
         const url = URL.createObjectURL(file);
-        const desc: NeoFileDescriptor = {
-          id: crypto.randomUUID(),
-          name: file.name,
+        const desc: osFile.NeoAudioFileDescriptor = {
           type: "neo/audio",
-          meta: {
-            size: file.size,
-            lastModified: file.lastModified,
-            mime: file.type || "audio/mpeg",
-          },
+          name: file.name,
+          mime: (file.type as any) || "audio/mpeg",
+          size: file.size,
           blobUrl: url,
-          cached: true,
+          meta: {
+            lastModified: file.lastModified,
+          },
         };
         return desc;
       },

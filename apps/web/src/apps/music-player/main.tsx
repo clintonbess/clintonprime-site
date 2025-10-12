@@ -2,7 +2,7 @@
 import React from "react";
 import { createRoot } from "react-dom/client";
 import type { NeoContext } from "../../kernel/types";
-import type { NeoAudioFileDescriptor } from "../../kernel/types/neo-file";
+import type { osFile } from "@clintonprime/types";
 import { normalizeMp3File } from "../../kernel/fs/audio-normalize";
 import { Kernel } from "../../kernel/kernel";
 
@@ -33,9 +33,8 @@ function MusicPlayer({ ctx }: { ctx: NeoContext }) {
   const audioRef = React.useRef<HTMLAudioElement>(null);
   const containerRef = React.useRef<HTMLDivElement>(null);
 
-  const [current, setCurrent] = React.useState<NeoAudioFileDescriptor | null>(
-    null
-  );
+  const [current, setCurrent] =
+    React.useState<osFile.NeoAudioFileDescriptor | null>(null);
   const [isPlaying, setPlaying] = React.useState(false);
   const [time, setTime] = React.useState({ current: 0, duration: 0 });
   const [vol, setVol] = React.useState(1);
@@ -44,7 +43,7 @@ function MusicPlayer({ ctx }: { ctx: NeoContext }) {
 
   // OS-level open
   React.useEffect(() => {
-    return ctx.events.on<NeoAudioFileDescriptor>(
+    return ctx.events.on<osFile.NeoAudioFileDescriptor>(
       "neo.audio.open",
       async (desc) => {
         setCurrent(desc);

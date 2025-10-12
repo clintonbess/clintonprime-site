@@ -15,19 +15,23 @@ export function createEventBus(): NeoEventBus {
     handlers.get(topic)?.forEach((h) => h(payload));
   }
 
-  async function ask(topic: string, payload?: any, timeoutMs = 15000) {
+  async function ask<TReq = any, TRes = any>(
+    topic: string,
+    payload?: TReq,
+    timeoutMs = 15000
+  ): Promise<TRes> {
     const cid = uuid();
     const reply = `${topic}:reply:${cid}`;
-    return new Promise((resolve, reject) => {
+    return new Promise<TRes>((resolve, reject) => {
       const off = on(reply, (data: any) => {
         off();
-        resolve(data);
+        resolve(data as TRes);
       });
       setTimeout(() => {
         off();
         reject(new Error(`ask timeout: ${topic}`));
       }, timeoutMs);
-      emit(topic, { ...payload, __cid: cid, __reply: reply });
+      emit(topic, { ...(payload as any), __cid: cid, __reply: reply });
     });
   }
 

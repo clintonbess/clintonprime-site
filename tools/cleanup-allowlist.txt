@@ -1,0 +1,12 @@
+apps/web/src/components/prime-window.tsx
+apps/web/src/components/quantum-window.tsx
+apps/web/src/components/fs/**
+apps/web/src/kernel/kernel.ts
+apps/web/src/kernel/events.ts
+apps/web/public/assets/**
+libs/types/**
+libs/api/src/**/prisma/**
+**/*.d.ts
+**/__tests__/**
+**/*.spec.ts
+

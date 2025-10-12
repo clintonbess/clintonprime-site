@@ -80,7 +80,14 @@ export default function SpotifyWidget() {
       )}
 
       {/* header */}
-      <div className="flex items-center justify-between mb-2">
+      <div className="flex items-center gap-2 justify-start mb-2">
+        {track.isPlaying && (
+          <motion.div
+            animate={{ opacity: [0.35, 1, 0.35], scale: [1, 1.15, 1] }}
+            transition={{ repeat: Infinity, duration: 1.6, ease: "easeInOut" }}
+            className="w-2 h-2 rounded-full bg-[var(--color-monokai-green)] shadow-[0_0_6px_rgba(166,226,46,0.55)]"
+          />
+        )}
         <div className="uppercase text-[10px] tracking-wider font-semibold">
           <span
             className="font-bold bg-gradient-to-r from-[var(--color-monokai-green)]
@@ -91,14 +98,6 @@ export default function SpotifyWidget() {
           </span>
           <span className={color}>{label}</span>
         </div>
-
-        {track.isPlaying && (
-          <motion.div
-            animate={{ opacity: [0.35, 1, 0.35], scale: [1, 1.15, 1] }}
-            transition={{ repeat: Infinity, duration: 1.6, ease: "easeInOut" }}
-            className="w-2 h-2 rounded-full bg-[var(--color-monokai-green)] shadow-[0_0_6px_rgba(166,226,46,0.55)]"
-          />
-        )}
       </div>
 
       {/* body */}

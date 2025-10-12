@@ -1,8 +1,8 @@
-import type { NeoAudioFileDescriptor } from "../types/neo-file";
+import type { osFile } from "@clintonprime/types";
 
 export async function normalizeMp3File(
   file: File
-): Promise<NeoAudioFileDescriptor> {
+): Promise<osFile.NeoAudioFileDescriptor> {
   if (file.type !== "audio/mpeg") {
     const isMp3 = /\.mp3$/i.test(file.name);
     if (!isMp3)

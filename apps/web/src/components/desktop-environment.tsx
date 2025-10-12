@@ -22,9 +22,9 @@ function GlobalDragCue() {
   const { dragging, overTarget } = useDragContext();
   if (!dragging || overTarget) return null;
   return (
-    <div className="pointer-events-none fixed top-6 left-1/2 -translate-x-1/2 z-50">
+    <div className="pointer-events-none fixed top-1/3 left-1/2 -translate-x-1/2 z-50">
       <div className="rounded-xl bg-black/60 px-3 py-1 text-sm text-white shadow">
-        Drag to a target… (Esc to cancel)
+        Drag to target… (Esc to cancel)
       </div>
     </div>
   );

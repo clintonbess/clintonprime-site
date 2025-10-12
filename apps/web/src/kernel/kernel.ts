@@ -3,7 +3,7 @@ import { createAudioFS } from "./fs";
 import { createPlayerHost } from "./player-host";
 import type { NeoContext, NeoAppManifest } from "./types";
 import { CapabilityRegistry } from "./capabilities";
-import type { NeoFileDescriptor } from "./types/neo-file";
+import type { osFile } from "@clintonprime/types";
 
 export const Kernel = {
   events: createEventBus(),
@@ -34,7 +34,7 @@ export const Kernel = {
   },
 
   // Kernel capability open
-  open(file: NeoFileDescriptor) {
+  open(file: osFile.NeoFileDescriptor) {
     return this.capabilities.open(file);
   },
 

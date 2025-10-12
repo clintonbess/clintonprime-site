@@ -1,22 +1,22 @@
-import type { NeoFileDescriptor, NeoFileType } from "./types/neo-file";
+import type { osFile } from "@clintonprime/types";
 
 type CapabilityHandler = {
-  open: (file: NeoFileDescriptor) => void | Promise<void>;
+  open: (file: osFile.NeoFileDescriptor) => void | Promise<void>;
   // future: icon, label, probe(), defaultAppId, etc.
 };
 
 export class CapabilityRegistry {
-  private map = new Map<NeoFileType, CapabilityHandler>();
+  private map = new Map<osFile.NeoFileType, CapabilityHandler>();
 
-  register(type: NeoFileType, handler: CapabilityHandler) {
+  register(type: osFile.NeoFileType, handler: CapabilityHandler) {
     this.map.set(type, handler);
   }
 
-  get(type: NeoFileType): CapabilityHandler | undefined {
+  get(type: osFile.NeoFileType): CapabilityHandler | undefined {
     return this.map.get(type);
   }
 
-  open(file: NeoFileDescriptor) {
+  open(file: osFile.NeoFileDescriptor) {
     const handler = this.map.get(file.type);
     if (!handler)
       throw new Error(`No capability registered for type: ${file.type}`);

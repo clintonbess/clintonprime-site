@@ -4,15 +4,14 @@
   "private": true,
   "type": "module",
   "main": "./dist/index.js",
-  "types": "./index.d.ts",
+  "types": "./dist/index.d.ts",
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
     "clean": "rimraf dist"
   },
   "exports": {
     ".": {
-      "types": "./index.d.ts",
-      "development": "./src/index.ts",
+      "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
     }
   },
