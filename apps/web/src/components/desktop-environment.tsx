@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
@@ -6,8 +6,6 @@ import {
   faMusic,
   faAtom,
   faFileLines,
-  faPlay,
-  faPause,
 } from "@fortawesome/free-solid-svg-icons";
 import { QuantumWindow } from "./quantum-window";
 import { ProgrammingWindow } from "./programming-window";
@@ -17,114 +15,23 @@ import { FileExplorerWindow } from "./file-explorer-window";
 import { faFolder } from "@fortawesome/free-solid-svg-icons";
 
 import SpotifyWidget from "./widgets/spotify-widget";
+import { Kernel } from "../kernel/kernel";
+import { useDragContext } from "../context/drag-context";
 
-/* Global Music Player Dock (bottom-left corner) */
-export function MusicPlayerDock({ currentTrack }: { currentTrack: any }) {
-  const [isPlaying, setIsPlaying] = useState(false);
-  const [progress, setProgress] = useState(0);
-  const [duration, setDuration] = useState(0);
-  const audioRef = useRef<HTMLAudioElement | null>(null);
-
-  useEffect(() => {
-    if (currentTrack && audioRef.current) {
-      const url = "media/" + encodeURIComponent(currentTrack.id + ".mp3");
-      audioRef.current.src = url;
-      audioRef.current.play().catch(() => {});
-      setIsPlaying(true);
-    }
-  }, [currentTrack]);
-
-  const togglePlay = () => {
-    const audio = audioRef.current;
-    if (!audio) return;
-    if (audio.paused) {
-      audio.play();
-      setIsPlaying(true);
-    } else {
-      audio.pause();
-      setIsPlaying(false);
-    }
-  };
-
-  const format = (sec: number) => {
-    if (!sec) return "0:00";
-    const m = Math.floor(sec / 60);
-    const s = Math.floor(sec % 60);
-    return `${m}:${s.toString().padStart(2, "0")}`;
-  };
-
+function GlobalDragCue() {
+  const { dragging, overTarget } = useDragContext();
+  if (!dragging || overTarget) return null;
   return (
-    <div
-      className="fixed bottom-4 left-4 z-50 rounded-xl shadow-lg font-mono w-64 p-4 border border-monokai-border"
-      style={{
-        background: "rgba(255, 255, 255, 0.05)",
-        backdropFilter: "blur(14px)",
-        boxShadow: "0 4px 15px rgba(0,0,0,0.4)",
-      }}
-    >
-      {currentTrack ? (
-        <>
-          <div className="flex items-center space-x-3 mb-2">
-            <img
-              src={currentTrack.cover || "/assets/default-cover.jpg"}
-              alt={currentTrack.name}
-              className="w-10 h-10 rounded-md border border-monokai-border object-cover"
-            />
-            <div className="flex-1 truncate">
-              <div className="truncate text-monokai-green text-sm font-semibold">
-                {currentTrack.name}
-              </div>
-              <div className="truncate text-monokai-fg1 text-xs">
-                {currentTrack.artist}
-              </div>
-            </div>
-            <button
-              onClick={togglePlay}
-              className={`text-lg transition-all ${
-                isPlaying
-                  ? "text-monokai-orange hover:text-monokai-red"
-                  : "text-monokai-green hover:text-monokai-cyan"
-              }`}
-            ></button>
-          </div>
-
-          <div className="w-full h-1 bg-monokai-fg2/30 rounded-full overflow-hidden mb-2">
-            <div
-              className="h-full bg-monokai-green transition-all"
-              style={{
-                width: `${(progress / duration) * 100 || 0}%`,
-              }}
-            />
-          </div>
-
-          <div className="flex items-center justify-between text-[10px] text-monokai-fg1">
-            <span>{format(progress)}</span>
-            <button
-              onClick={togglePlay}
-              className="text-monokai-green hover:text-monokai-yellow text-base transition-all"
-              title={isPlaying ? "Pause" : "Play"}
-            >
-              <FontAwesomeIcon icon={isPlaying ? faPause : faPlay} />
-            </button>
-            <span>{format(duration)}</span>
-          </div>
-        </>
-      ) : (
-        <div className="text-monokai-magenta text-xs text-center py-2">
-          <FontAwesomeIcon icon={faMusic} className="mr-2" />
-          Select a track to begin
-        </div>
-      )}
-
-      <audio
-        ref={audioRef}
-        onTimeUpdate={(e) => setProgress(e.currentTarget.currentTime)}
-        onLoadedMetadata={(e) => setDuration(e.currentTarget.duration)}
-        onEnded={() => setIsPlaying(false)}
-      />
+    <div className="pointer-events-none fixed top-1/3 left-1/2 -translate-x-1/2 z-50">
+      <div className="rounded-xl bg-black/60 px-3 py-1 text-sm text-white shadow">
+        Drag to target… (Esc to cancel)
+      </div>
     </div>
   );
 }
+
+/* Global Music Player Dock (bottom-left corner) */
+// MusicPlayerDock removed in favor of dedicated music-player app UI
 
 /* Desktop Environment */
 export function DesktopEnvironment() {
@@ -133,6 +40,34 @@ export function DesktopEnvironment() {
   >(null);
 
   const [currentTrack, setCurrentTrack] = useState<any>(null);
+  // Subscribe to OS-level open events and update currentTrack (prefer blobUrl)
+  useEffect(() => {
+    return Kernel.events.on<any>("neo.audio.open", (desc: any) => {
+      setCurrentTrack((prev: any) => ({
+        id: desc.id,
+        name: desc.name,
+        artist: desc.meta?.artist ?? prev?.artist ?? "Unknown",
+        cover: desc.meta?.cover ?? prev?.cover ?? "/assets/default-cover.jpg",
+        blobUrl: desc.blobUrl,
+      }));
+    });
+  }, []);
+
+  // Revoke previous blob URLs to avoid memory leaks
+  useEffect(() => {
+    let prevUrl: string | undefined = (currentTrack as any)?.blobUrl;
+    return () => {
+      if (
+        prevUrl &&
+        typeof prevUrl === "string" &&
+        prevUrl.startsWith("blob:")
+      ) {
+        try {
+          URL.revokeObjectURL(prevUrl);
+        } catch {}
+      }
+    };
+  }, [(currentTrack as any)?.blobUrl]);
   const [time, setTime] = useState(new Date());
 
   useEffect(() => {
@@ -169,7 +104,7 @@ export function DesktopEnvironment() {
     },
     {
       id: "music",
-      label: "music_studio",
+      label: "Music",
       icon: faMusic,
       color: "text-monokai-green",
       ring: "ring-monokai-green",
@@ -232,8 +167,10 @@ export function DesktopEnvironment() {
         }}
       />
 
-      {/* Spotify Widget */}
-      <SpotifyWidget />
+      {/* Spotify Widget - top right under the status bar */}
+      <div className="fixed top-10 right-4 z-30">
+        <SpotifyWidget />
+      </div>
 
       {/* App Launcher */}
       <div className="relative z-10 flex flex-col items-center justify-center h-full pt-8">
@@ -285,8 +222,8 @@ export function DesktopEnvironment() {
       {activeWindow === "explorer" && (
         <FileExplorerWindow onClose={closeWindow} />
       )}
-      {/* Global Music Player Dock */}
-      <MusicPlayerDock currentTrack={currentTrack} />
+      {/* Global single drag cue */}
+      <GlobalDragCue />
     </div>
   );
 }

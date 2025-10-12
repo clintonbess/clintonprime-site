@@ -3,3 +3,4 @@ dist/
 .env
 .DS_Store
 *.zip
+knip-result.json

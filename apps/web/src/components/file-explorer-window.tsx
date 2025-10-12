@@ -1,26 +1,66 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { PrimeWindow } from "./prime-window";
+import type {
+  NeoFolderNode,
+  NeoFileNode,
+  NeoFileBase,
+} from "@clintonprime/types";
+import { Kernel } from "../kernel/kernel";
+// import { normalizeMp3File } from "../kernel/fs/audio-normalize"; // reserved for local file inputs
+import { GridView, ListView, type FsViewItem } from "../components/fs/fs-views";
+import type { osFile } from "@clintonprime/types";
 import { useSelection } from "../hooks/use-selection";
 
-interface FileItem {
+type FileItem =
+  | NeoFolderNode
+  | (NeoFileNode<NeoFileBase> & { file?: NeoFileBase });
+
+type OnOpenPayload = {
   id: string;
   name: string;
-  type: "folder" | "document";
-  parentId: string | null;
-}
+  artist?: string;
+  album?: string;
+  cover?: string;
+  url?: string;
+  kind?: string;
+};
 
 const DEFAULT_FILES: FileItem[] = [
-  { id: "1", name: "Projects", type: "folder", parentId: null },
-  { id: "2", name: "Playlists", type: "folder", parentId: null },
-  { id: "3", name: "Notes.txt", type: "document", parentId: null },
-  { id: "4", name: "Quantum.log", type: "document", parentId: null },
-  { id: "5", name: "Vision Viewer", type: "folder", parentId: "1" },
-  { id: "6", name: "dev-notes.txt", type: "document", parentId: "1" },
-  { id: "7", name: "assets", type: "folder", parentId: "5" },
+  { id: "1", name: "Projects", nodeType: "folder", parentId: null },
+  { id: "2", name: "Playlists", nodeType: "folder", parentId: null },
+  { id: "music", name: "Music", nodeType: "folder", parentId: null },
+  {
+    id: "spotify-recent",
+    name: "spotify-recent",
+    nodeType: "folder",
+    parentId: "music",
+  },
+  {
+    id: "local-tracks",
+    name: "local-tracks",
+    nodeType: "folder",
+    parentId: "music",
+  },
+  { id: "5", name: "Vision Viewer", nodeType: "folder", parentId: "1" },
+  { id: "7", name: "assets", nodeType: "folder", parentId: "5" },
 ];
 
-export function FileExplorerWindow({ onClose }: { onClose: () => void }) {
+export function FileExplorerWindow({
+  onClose,
+  readOnly = false,
+  rootFolderId,
+  initialFolderId,
+  onOpenFile,
+  embedded = false,
+}: {
+  onClose: () => void;
+  readOnly?: boolean;
+  rootFolderId?: string;
+  initialFolderId?: string;
+  onOpenFile?: (payload: OnOpenPayload) => void;
+  embedded?: boolean;
+}) {
   const [files, setFiles] = useState<FileItem[]>([]);
   const [currentFolder, setCurrentFolder] = useState<string | null>(null);
   const [breadcrumb, setBreadcrumb] = useState<FileItem[]>([]);
@@ -45,7 +85,21 @@ export function FileExplorerWindow({ onClose }: { onClose: () => void }) {
     if (savedPath) setCurrentFolder(savedPath === "null" ? null : savedPath);
     if (savedTrail) setBreadcrumb(JSON.parse(savedTrail));
     if (savedView === "list" || savedView === "grid") setViewMode(savedView);
-  }, []);
+    // If scoped, override persisted location with provided root/initial
+    if (rootFolderId) {
+      const rootNode = DEFAULT_FILES.find((f) => f.id === rootFolderId) || null;
+      const initId = initialFolderId || rootFolderId;
+      const initNode = DEFAULT_FILES.find((f) => f.id === initId) || null;
+      setCurrentFolder(initId);
+      setBreadcrumb(
+        [rootNode, initNode]
+          .filter((x): x is FileItem => Boolean(x))
+          .filter((node, idx, arr) =>
+            idx === 0 ? true : node.id !== arr[0].id
+          )
+      );
+    }
+  }, [rootFolderId, initialFolderId]);
 
   // --- Persist changes ---
   useEffect(() => {
@@ -57,12 +111,82 @@ export function FileExplorerWindow({ onClose }: { onClose: () => void }) {
     }
   }, [files, currentFolder, breadcrumb, viewMode]);
 
+  // --- Load Music folder contents (Spotify + Local mapped to Neo files) ---
+  useEffect(() => {
+    (async () => {
+      try {
+        const res = await fetch("/api/spotify/recent");
+        if (res.ok) {
+          const data = await res.json();
+          const spotifyNodes: FileItem[] = (
+            Array.isArray(data.tracks) ? data.tracks.slice(0, 5) : []
+          ).map((t: any) => ({
+            id: `spotify-${t.id}`,
+            name: t.name,
+            nodeType: "file",
+            parentId: "spotify-recent",
+            file: {
+              id: t.id,
+              name: t.name,
+              kind: "neo/audio-list",
+              cover: t.image,
+              meta: { artist: t.artist, album: t.album, raw: t },
+            },
+          }));
+          setFiles((prev) => {
+            const filtered = prev.filter(
+              (n) =>
+                !(
+                  n.parentId === "spotify-recent" &&
+                  String(n.id).startsWith("spotify-")
+                )
+            );
+            return [...filtered, ...spotifyNodes];
+          });
+        }
+      } catch {}
+      try {
+        const res = await fetch("/api/music/tracks");
+        if (res.ok) {
+          const data = await res.json();
+          const localNodes: FileItem[] = (
+            Array.isArray(data.tracks) ? data.tracks : []
+          ).map((t: any) => ({
+            id: `local-${t.id}`,
+            name: t.name,
+            nodeType: "file",
+            parentId: "local-tracks",
+            file: {
+              id: t.id,
+              name: t.name,
+              kind: "neo/audio",
+              cover: t.cover ?? "/assets/default-cover.jpg",
+              meta: { artist: t.artist, album: t.album, raw: t },
+            },
+          }));
+          setFiles((prev) => {
+            const filtered = prev.filter(
+              (n) =>
+                !(
+                  n.parentId === "local-tracks" &&
+                  String(n.id).startsWith("local-")
+                )
+            );
+            return [...filtered, ...localNodes];
+          });
+        }
+      } catch {}
+    })();
+  }, []);
+
   // --- Visible files ---
-  const visibleFiles = files.filter((f) => f.parentId === currentFolder);
+  const visibleFiles = files.filter(
+    (f) => (f.parentId ?? null) === currentFolder
+  );
 
   // --- Navigation ---
   const openFolder = (folder: FileItem) => {
-    if (folder.type !== "folder") return;
+    if (folder.nodeType !== "folder") return;
     setCurrentFolder(folder.id);
     setBreadcrumb((prev) => [...prev, folder]);
     clearSelection();
@@ -70,6 +194,17 @@ export function FileExplorerWindow({ onClose }: { onClose: () => void }) {
 
   const goBack = () => {
     if (breadcrumb.length === 0) return;
+    // prevent navigating above root when scoped
+    if (rootFolderId && breadcrumb.length <= 1) {
+      setCurrentFolder(rootFolderId);
+      setBreadcrumb(
+        [DEFAULT_FILES.find((f) => f.id === rootFolderId)].filter(
+          (x): x is FileItem => Boolean(x)
+        )
+      );
+      clearSelection();
+      return;
+    }
     const newTrail = [...breadcrumb];
     newTrail.pop();
     const parent = newTrail[newTrail.length - 1] ?? null;
@@ -86,7 +221,7 @@ export function FileExplorerWindow({ onClose }: { onClose: () => void }) {
       {
         id,
         name: `New Folder ${prev.length + 1}`,
-        type: "folder",
+        nodeType: "folder",
         parentId: currentFolder,
       },
     ]);
@@ -99,8 +234,13 @@ export function FileExplorerWindow({ onClose }: { onClose: () => void }) {
       {
         id,
         name: `New File ${prev.length + 1}.txt`,
-        type: "document",
+        nodeType: "file",
         parentId: currentFolder,
+        file: {
+          id,
+          name: `New File ${prev.length + 1}.txt`,
+          kind: "neo/project",
+        },
       },
     ]);
   };
@@ -118,7 +258,7 @@ export function FileExplorerWindow({ onClose }: { onClose: () => void }) {
     };
 
     const folders = files.filter(
-      (f) => f.type === "folder" && idsToDelete.has(f.id)
+      (f) => f.nodeType === "folder" && idsToDelete.has(f.id)
     );
     const allChildIds = collectChildren(folders.map((f) => f.id));
 
@@ -156,6 +296,11 @@ export function FileExplorerWindow({ onClose }: { onClose: () => void }) {
   // --- Keyboard shortcuts ---
   useEffect(() => {
     const handleKey = (e: KeyboardEvent) => {
+      if (readOnly) {
+        if (e.key === "Backspace") goBack();
+        if (e.key === "Escape") clearSelection();
+        return;
+      }
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "c") {
         const copied = files.filter((f) => selectedIds.includes(f.id));
         setClipboard(copied);
@@ -195,6 +340,7 @@ export function FileExplorerWindow({ onClose }: { onClose: () => void }) {
     clearSelection,
     renamingId,
     renameValue,
+    readOnly,
   ]);
 
   // --- Clicks ---
@@ -204,13 +350,27 @@ export function FileExplorerWindow({ onClose }: { onClose: () => void }) {
     selectItem(id, multi, range);
   };
 
-  return (
-    <PrimeWindow
-      title="File Explorer"
-      icon="fa-folder"
-      color="text-monokai-blue"
-      onClose={onClose}
-    >
+  const viewItems: FsViewItem[] = visibleFiles.map((f) => {
+    if (f.nodeType === "folder") {
+      return {
+        id: f.id,
+        name: f.name,
+        isFolder: true,
+        selected: selectedIds.includes(f.id),
+      };
+    }
+    const file = (f as any).file;
+    return {
+      id: f.id,
+      name: f.name,
+      isFolder: false,
+      cover: file?.cover || "/assets/default-album-cover.png",
+      selected: selectedIds.includes(f.id),
+    };
+  });
+
+  const content = (
+    <>
       {/* Header: Breadcrumbs + Toolbar */}
       <div className="border-b border-monokai-border pb-2 mb-3 text-sm">
         {/* Breadcrumb Bar */}
@@ -252,28 +412,30 @@ export function FileExplorerWindow({ onClose }: { onClose: () => void }) {
         </div>
 
         {/* Attached Toolbar */}
-        <div className="flex gap-2 mt-1 text-xs font-mono">
-          <button
-            onClick={addFolder}
-            className="px-3 py-1.5 bg-[rgba(255,255,255,0.05)] rounded border border-monokai-border hover:text-monokai-green transition"
-          >
-            ➕ Folder
-          </button>
-          <button
-            onClick={addFile}
-            className="px-3 py-1.5 bg-[rgba(255,255,255,0.05)] rounded border border-monokai-border hover:text-monokai-cyan transition"
-          >
-            📄 File
-          </button>
-          {selectedIds.length > 0 && (
+        {!readOnly && (
+          <div className="flex gap-2 mt-1 text-xs font-mono">
             <button
-              onClick={deleteSelected}
-              className="px-3 py-1.5 bg-[rgba(255,255,255,0.05)] rounded border border-monokai-border hover:text-monokai-red transition"
+              onClick={addFolder}
+              className="px-3 py-1.5 bg-[rgba(255,255,255,0.05)] rounded border border-monokai-border hover:text-monokai-green transition"
             >
-              🗑 Delete
+              ➕ Folder
             </button>
-          )}
-        </div>
+            <button
+              onClick={addFile}
+              className="px-3 py-1.5 bg-[rgba(255,255,255,0.05)] rounded border border-monokai-border hover:text-monokai-cyan transition"
+            >
+              📄 File
+            </button>
+            {selectedIds.length > 0 && (
+              <button
+                onClick={deleteSelected}
+                className="px-3 py-1.5 bg-[rgba(255,255,255,0.05)] rounded border border-monokai-border hover:text-monokai-red transition"
+              >
+                🗑 Delete
+              </button>
+            )}
+          </div>
+        )}
       </div>
 
       {/* File list */}
@@ -284,55 +446,158 @@ export function FileExplorerWindow({ onClose }: { onClose: () => void }) {
           animate={{ opacity: 1, x: 0 }}
           exit={{ opacity: 0, x: -10 }}
           transition={{ duration: 0.25 }}
-          className={`grid gap-2 ${
-            viewMode === "grid"
-              ? "grid-cols-4 sm:grid-cols-6"
-              : "grid-cols-1 divide-y divide-monokai-border"
-          }`}
         >
-          {visibleFiles.map((f) => (
-            <div
-              key={f.id}
-              onClick={(e) => handleClick(e, f.id)}
-              onDoubleClick={() => openFolder(f)}
-              className={`p-2 rounded-md cursor-pointer flex items-center space-x-2 ${
-                viewMode === "grid" ? "flex-col text-center" : ""
-              } ${
-                selectedIds.includes(f.id)
-                  ? "bg-monokai-bg2/70 border border-monokai-blue shadow-[0_0_8px_rgba(102,217,239,0.3)]"
-                  : "hover:bg-monokai-bg2/40 border border-transparent"
-              } transition-all`}
-            >
-              <i
-                className={`fa-solid ${
-                  f.type === "folder" ? "fa-folder" : "fa-file-lines"
-                } ${
-                  f.type === "folder"
-                    ? "text-monokai-yellow"
-                    : "text-monokai-fg2"
-                } text-xl`}
-              />
-              {renamingId === f.id ? (
-                <input
-                  ref={renameInputRef}
-                  value={renameValue}
-                  onChange={(e) => setRenameValue(e.target.value)}
-                  onBlur={commitRename}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") commitRename();
-                    e.stopPropagation(); // prevent keydown leaks
-                  }}
-                  className="bg-transparent border-b border-monokai-border text-xs text-monokai-fg1 outline-none text-center"
-                />
-              ) : (
-                <span className="truncate text-xs text-monokai-fg1">
-                  {f.name}
-                </span>
-              )}
-            </div>
-          ))}
+          {viewMode === "grid" ? (
+            <GridView
+              items={viewItems}
+              onClick={handleClick}
+              onDoubleClick={async (id) => {
+                const f = visibleFiles.find((x) => x.id === id);
+                if (!f) return;
+                if (f.nodeType === "folder") return openFolder(f);
+                // your existing double-click open logic:
+                const file = (f as any).file;
+                const url: string | undefined = file?.meta?.raw?.url;
+                onOpenFile?.({
+                  id: file?.id,
+                  name: file?.name,
+                  artist: file?.meta?.artist,
+                  album: file?.meta?.album,
+                  cover: file?.cover,
+                  url,
+                  kind: file?.kind,
+                });
+                if (file?.kind === "neo/audio" && typeof url === "string") {
+                  const desc: osFile.NeoAudioFileDescriptor = {
+                    type: "neo/audio",
+                    name: file.name,
+                    mime: "audio/mpeg",
+                    size: 0,
+                    blobUrl: url,
+                    meta: {
+                      artist: file.meta?.artist,
+                      album: file.meta?.album,
+                      title: file.name,
+                      cover: file.cover,
+                    },
+                  };
+                  await Kernel.open(desc);
+                }
+              }}
+              onDragStart={(e, id) => {
+                const f = visibleFiles.find((x) => x.id === id);
+                if (!f || f.nodeType !== "file") return;
+                const file = (f as any).file;
+                const payload = {
+                  id: file.id,
+                  name: file.name,
+                  type: file.kind,
+                  blobUrl: file.meta?.raw?.url,
+                  meta: {
+                    artist: file.meta?.artist,
+                    album: file.meta?.album,
+                    cover: file.cover,
+                  },
+                };
+                e.dataTransfer.effectAllowed = "copy";
+                e.dataTransfer.setData(
+                  "application/x-neo-file",
+                  JSON.stringify(payload)
+                );
+                if (file.kind === "neo/audio") {
+                  try {
+                    e.dataTransfer.setData("application/x-neo-audio", "1");
+                  } catch {}
+                }
+                if (typeof file.meta?.raw?.url === "string") {
+                  e.dataTransfer.setData("text/uri-list", file.meta.raw.url);
+                }
+              }}
+            />
+          ) : (
+            <ListView
+              items={viewItems}
+              onClick={handleClick}
+              onDoubleClick={async (id) => {
+                // same as above
+                const f = visibleFiles.find((x) => x.id === id);
+                if (!f) return;
+                if (f.nodeType === "folder") return openFolder(f);
+                const file = (f as any).file;
+                const url: string | undefined = file?.meta?.raw?.url;
+                onOpenFile?.({
+                  id: file?.id,
+                  name: file?.name,
+                  artist: file?.meta?.artist,
+                  album: file?.meta?.album,
+                  cover: file?.cover,
+                  url,
+                  kind: file?.kind,
+                });
+                if (file?.kind === "neo/audio" && typeof url === "string") {
+                  const desc: osFile.NeoAudioFileDescriptor = {
+                    type: "neo/audio",
+                    name: file.name,
+                    mime: "audio/mpeg",
+                    size: 0,
+                    blobUrl: url,
+                    meta: {
+                      artist: file.meta?.artist,
+                      album: file.meta?.album,
+                      title: file.name,
+                      cover: file.cover,
+                    },
+                  };
+                  await Kernel.open(desc);
+                }
+              }}
+              onDragStart={(e, id) => {
+                // same as above
+                const f = visibleFiles.find((x) => x.id === id);
+                if (!f || f.nodeType !== "file") return;
+                const file = (f as any).file;
+                const payload = {
+                  id: file.id,
+                  name: file.name,
+                  type: file.kind,
+                  blobUrl: file.meta?.raw?.url,
+                  meta: {
+                    artist: file.meta?.artist,
+                    album: file.meta?.album,
+                    cover: file.cover,
+                  },
+                };
+                e.dataTransfer.effectAllowed = "copy";
+                e.dataTransfer.setData(
+                  "application/x-neo-file",
+                  JSON.stringify(payload)
+                );
+                if (file.kind === "neo/audio") {
+                  try {
+                    e.dataTransfer.setData("application/x-neo-audio", "1");
+                  } catch {}
+                }
+                if (typeof file.meta?.raw?.url === "string") {
+                  e.dataTransfer.setData("text/uri-list", file.meta.raw.url);
+                }
+              }}
+            />
+          )}
         </motion.div>
       </AnimatePresence>
+    </>
+  );
+
+  if (embedded) return content;
+
+  return (
+    <PrimeWindow
+      title="File Explorer"
+      icon="fa-folder"
+      color="text-monokai-blue"
+      onClose={onClose}
+    >
+      {content}
     </PrimeWindow>
   );
 }

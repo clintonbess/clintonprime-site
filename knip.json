@@ -1,0 +1,30 @@
+{
+  "$schema": "https://unpkg.com/knip@latest/schema.json",
+  "workspaces": {
+    "apps/web": {
+      "entry": [
+        "src/main.tsx",
+        "src/**/*.tsx",
+        "src/**/*.ts"
+      ]
+    },
+    "libs/api": {
+      "entry": [
+        "src/**/*.ts"
+      ]
+    },
+    "libs/types": {
+      "entry": [
+        "src/**/*.ts"
+      ]
+    }
+  },
+  "ignore": [
+    "**/*.d.ts",
+    "**/__tests__/**",
+    "**/*.test.*",
+    "**/*.spec.*",
+    "tools/**",
+    "apps/web/src/index.css"
+  ]
+}
