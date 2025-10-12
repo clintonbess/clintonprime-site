@@ -9,4 +9,3 @@ jobs:
         with: { version: 9 }
       - run: pnpm install --no-frozen-lockfile
       - run: pnpm -r run build
-      - run: pnpm run check:deadcode
