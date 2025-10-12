@@ -45,3 +45,25 @@ export interface NeoContext {
   events: NeoEventBus;
   player: NeoPlayerHost;
 }
+
+// Generic Neo file model (specialized for music)
+export type NeoKind = "neo/audio" | "neo/video" | "neo/project" | string;
+
+export interface NeoFileBase {
+  id: string;
+  name: string;
+  kind: NeoKind;
+  cover?: string;
+  tags?: string[];
+  meta?: Record<string, any>;
+}
+
+export interface NeoFileMusic extends NeoFileBase {
+  kind: "neo/audio";
+  artist: string;
+  album?: string;
+  source: {
+    url: string; // blob: or https:
+    origin: "local" | "spotify" | "remote";
+  };
+}

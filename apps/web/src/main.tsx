@@ -12,6 +12,9 @@ Kernel.register({
   entry: () => import("./apps/music-player/main"),
 });
 
+// Ensure kernel capabilities are registered during initial load
+Kernel.boot();
+
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
     <IndexPage />

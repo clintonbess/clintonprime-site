@@ -51,7 +51,7 @@ export function DropZone() {
   return (
     <div
       aria-hidden
-      className={`pointer-events-none fixed inset-0 transition ${
+      className={`pointer-events-none fixed inset-0 transition z-[60] ${
         over
           ? "bg-black/30 outline outline-2 outline-green-400"
           : "bg-transparent"

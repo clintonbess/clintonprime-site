@@ -67,6 +67,7 @@ async function main() {
   if (!arg || arg === "all") {
     // Zip API and Web app
     await zipTarget(projectRoot, "libs/api");
+    await zipTarget(projectRoot, "libs/types");
     await zipTarget(projectRoot, "apps/web");
   } else {
     // Custom target

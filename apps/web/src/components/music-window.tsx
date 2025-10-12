@@ -1,77 +1,67 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { PrimeWindow } from "./prime-window";
-import { FaPlay } from "react-icons/fa";
-
-type SpotifyTrack = {
-  id: string;
-  name: string;
-  artist: string;
-  album: string;
-  image: string;
-  url: string;
-};
-
-type LocalTrack = {
-  id: string;
-  name: string;
-  artist: string;
-  cover?: string;
-  url: string;
-};
+import { FileExplorerWindow } from "./file-explorer-window";
+import { Kernel } from "../kernel/kernel";
 
 export function MusicWindow({
   onClose,
   onSelectTrack,
 }: {
   onClose: () => void;
-  onSelectTrack: (track: LocalTrack) => void;
+  onSelectTrack: (track: {
+    id: string;
+    name: string;
+    artist: string;
+    cover?: string;
+    url: string;
+  }) => void;
 }) {
   const [activeTab, setActiveTab] = useState<"spotify" | "local">("spotify");
-  const [spotifyTracks, setSpotifyTracks] = useState<SpotifyTrack[]>([]);
-  const [localTracks, setLocalTracks] = useState<LocalTrack[]>([]);
 
-  // Load Spotify Recents
-  useEffect(() => {
-    async function loadSpotify() {
-      try {
-        const res = await fetch("/api/spotify/recent");
-        if (!res.ok) throw new Error("Failed to load Spotify tracks");
-        const data = await res.json();
-        if (Array.isArray(data.tracks))
-          setSpotifyTracks(data.tracks.slice(0, 5));
-      } catch (e) {
-        console.warn("Spotify API unavailable:", e);
-      }
+  const handleOpen = (file: {
+    id: string;
+    name: string;
+    artist?: string;
+    album?: string;
+    cover?: string;
+    url?: string;
+    kind?: string;
+  }) => {
+    const url = file.url || "";
+    const isNeoAudio = file.kind === "neo/audio" && !!url;
+    if (isNeoAudio) {
+      // Notify kernel listeners (player/app) with existing event contract
+      Kernel.events.emit("audio:file:dropped", {
+        id: file.id,
+        name: file.name,
+        type: "neo/audio",
+        blobUrl: url,
+        meta: { artist: file.artist, album: file.album, cover: file.cover },
+      });
+      // Update dock UI via parent handler
+      onSelectTrack({
+        id: file.id,
+        name: file.name,
+        artist: file.artist || "",
+        cover: file.cover,
+        url,
+      });
+      return;
     }
-    loadSpotify();
-  }, []);
-
-  // Load Local MP3s
-  useEffect(() => {
-    async function loadLocal() {
-      try {
-        const res = await fetch("/api/music/tracks");
-        if (!res.ok) throw new Error("Failed to load tracks");
-        const data = await res.json();
-        if (Array.isArray(data.tracks)) setLocalTracks(data.tracks);
-      } catch (err) {
-        console.warn("Failed to load local tracks:", err);
-        setLocalTracks([]);
-      }
-    }
-    loadLocal();
-  }, []);
+    // For list-only items (e.g., neo/audio-list), open external link as fallback
+    if (url) window.open(url, "_blank", "noopener,noreferrer");
+  };
 
   const tabs = [
     {
       key: "spotify",
-      name: "spotify_recents.js",
+      name: "spotify-recents",
       color: "text-monokai-green",
       icon: "fa-brands fa-spotify",
     },
     {
       key: "local",
-      name: "local_tracks.js",
+      name: "local-tracks",
       color: "text-monokai-cyan",
       icon: "fa-solid fa-music",
     },
@@ -102,86 +92,28 @@ export function MusicWindow({
         ))}
       </div>
 
-      {/* Spotify Recents */}
+      {/* Spotify Recents (embedded read-only explorer) */}
       {activeTab === "spotify" && (
-        <div className="space-y-3">
-          {!spotifyTracks.length && (
-            <div className="text-monokai-fg2 text-sm">
-              Loading recent Spotify tracks...
-            </div>
-          )}
-          {spotifyTracks.map((track) => (
-            <div
-              key={track.id}
-              className="flex items-center bg-monokai-bg2/40 border border-monokai-border rounded-lg p-3 hover:bg-monokai-bg2/70 transition-all"
-            >
-              <img
-                src={track.image}
-                alt={track.name}
-                className="w-12 h-12 rounded-md mr-4 border border-monokai-border object-cover"
-              />
-              <div className="flex-1 truncate">
-                <div className="text-monokai-fg text-sm font-medium truncate">
-                  {track.name}
-                </div>
-                <div className="text-monokai-fg2 text-xs truncate">
-                  {track.artist} • {track.album}
-                </div>
-              </div>
-              <a
-                href={track.url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-monokai-blue hover:text-monokai-green text-xs"
-              >
-                Open
-              </a>
-            </div>
-          ))}
-        </div>
+        <FileExplorerWindow
+          onClose={onClose}
+          embedded
+          readOnly
+          rootFolderId="music"
+          initialFolderId="spotify-recent"
+          onOpenFile={handleOpen}
+        />
       )}
 
-      {/* Local Tracks */}
+      {/* Local Tracks (embedded read-only explorer) */}
       {activeTab === "local" && (
-        <div className="grid grid-cols-3 gap-4 p-2">
-          {localTracks.map((t) => (
-            <div
-              key={t.id}
-              className="group bg-monokai-bg2/40 border border-monokai-border rounded-lg p-3 text-center hover:bg-monokai-bg2/70 transition-all"
-            >
-              <div className="relative w-full aspect-square bg-monokai-bg3 border border-monokai-border rounded-md mb-3 overflow-hidden">
-                <button
-                  onClick={() => onSelectTrack(t)}
-                  className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-10 p-3 rounded-full bg-monokai-bg/70 border border-monokai-border text-monokai-green hover:text-monokai-orange hover:bg-monokai-bg/90 transition-all shadow"
-                  aria-label={`Play ${t.name}`}
-                  title={`Play ${t.name}`}
-                >
-                  <FaPlay className="text-2xl" />
-                </button>
-                <img
-                  src={t.cover || "/assets/default-cover.jpg"}
-                  alt={t.name}
-                  className="w-full h-full object-cover"
-                />
-              </div>
-              <div className="truncate text-monokai-green font-semibold text-sm">
-                {t.name}
-              </div>
-              <div className="truncate text-monokai-fg2 text-xs mb-2">
-                {t.artist}
-              </div>
-              <div className="flex justify-center space-x-3">
-                <a
-                  href={t.url}
-                  download
-                  className="px-2 py-1 text-xs border border-monokai-blue rounded hover:bg-monokai-blue/20 text-monokai-blue hover:text-monokai-green transition-all"
-                >
-                  Borrow
-                </a>
-              </div>
-            </div>
-          ))}
-        </div>
+        <FileExplorerWindow
+          onClose={onClose}
+          embedded
+          readOnly
+          rootFolderId="music"
+          initialFolderId="local-tracks"
+          onOpenFile={handleOpen}
+        />
       )}
     </PrimeWindow>
   );

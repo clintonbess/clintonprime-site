@@ -2,11 +2,15 @@ import { createEventBus } from "./event-bus";
 import { createAudioFS } from "./fs";
 import { createPlayerHost } from "./player-host";
 import type { NeoContext, NeoAppManifest } from "./types";
+import { CapabilityRegistry } from "./capabilities";
+import type { NeoFileDescriptor } from "./types/neo-file";
 
 export const Kernel = {
   events: createEventBus(),
   fs: createAudioFS(),
   registry: new Map<string, NeoAppManifest>(),
+  capabilities: new CapabilityRegistry(),
+  _booted: false as boolean,
 
   register(manifest: NeoAppManifest) {
     this.registry.set(manifest.id, manifest);
@@ -14,7 +18,7 @@ export const Kernel = {
 
   async launch(
     id: string,
-    mountTarget: HTMLElement,
+    _mountTarget: HTMLElement,
     audioEl?: HTMLAudioElement
   ) {
     const mf = this.registry.get(id)!;
@@ -27,5 +31,21 @@ export const Kernel = {
       player: createPlayerHost(audioEl ?? document.createElement("audio")),
     };
     mod.mount(ctx);
+  },
+
+  // Kernel capability open
+  open(file: NeoFileDescriptor) {
+    return this.capabilities.open(file);
+  },
+
+  // Kernel boot: register audio capability to re-emit OS-level event
+  boot() {
+    if (this._booted) return;
+    this._booted = true;
+    this.capabilities.register("neo/audio", {
+      open: (file) => {
+        this.events.emit("neo.audio.open", file);
+      },
+    });
   },
 };

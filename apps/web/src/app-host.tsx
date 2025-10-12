@@ -1,6 +1,6 @@
 import React from "react";
 import { Kernel } from "./kernel/kernel";
-import { DropZone } from "./dropzone";
+// import { DropZone } from "./dropzone"; // global overlay removed; player has scoped dropzone
 
 const APPS = [{ id: "music-player", name: "Music Player" }];
 
@@ -29,7 +29,6 @@ export function AppHost() {
         ))}
       </div>
       <div id="app-root" className="flex-1 overflow-auto" />
-      <DropZone />
     </div>
   );
 }
