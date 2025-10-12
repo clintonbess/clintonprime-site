@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { PrimeWindow } from "./prime-window";
 import { FaPlay } from "react-icons/fa";
+
 type SpotifyTrack = {
   id: string;
   name: string;
@@ -25,7 +26,7 @@ export function MusicWindow({
   onClose: () => void;
   onSelectTrack: (track: LocalTrack) => void;
 }) {
-  const [tab, setTab] = useState<"spotify" | "local">("spotify");
+  const [activeTab, setActiveTab] = useState<"spotify" | "local">("spotify");
   const [spotifyTracks, setSpotifyTracks] = useState<SpotifyTrack[]>([]);
   const [localTracks, setLocalTracks] = useState<LocalTrack[]>([]);
 
@@ -61,34 +62,48 @@ export function MusicWindow({
     loadLocal();
   }, []);
 
+  const tabs = [
+    {
+      key: "spotify",
+      name: "spotify_recents.js",
+      color: "text-monokai-green",
+      icon: "fa-brands fa-spotify",
+    },
+    {
+      key: "local",
+      name: "local_tracks.js",
+      color: "text-monokai-cyan",
+      icon: "fa-solid fa-music",
+    },
+  ];
+
   return (
     <PrimeWindow
-      title="music_studio"
+      title="Music Studio"
       icon="fa-music"
       color="text-monokai-green"
       onClose={onClose}
     >
-      {/* Tabs */}
-      <div className="flex border-b border-monokai-border mb-4 text-sm">
-        {[
-          { id: "spotify", label: "Spotify Recents" },
-          { id: "local", label: "Local Tracks" },
-        ].map((t) => (
-          <button
-            key={t.id}
-            onClick={() => setTab(t.id as "spotify" | "local")}
-            className={`px-4 py-2 font-mono transition-all ${
-              tab === t.id
-                ? "text-monokai-green border-b-2 border-monokai-green"
-                : "text-monokai-fg2 hover:text-monokai-fg"
+      {/* Tab bar (matches Quantum / Readme style) */}
+      <div className="flex items-center space-x-2 border-b border-monokai-border pb-1 mb-3 text-xs font-mono">
+        {tabs.map((tab) => (
+          <div
+            key={tab.key}
+            onClick={() => setActiveTab(tab.key as "spotify" | "local")}
+            className={`px-3 py-1 rounded-t-md select-none ${
+              activeTab === tab.key
+                ? "bg-[#2e2e2e] text-monokai-fg border-t border-x border-monokai-border"
+                : "text-monokai-fg2 hover:text-monokai-fg1 cursor-pointer"
             }`}
           >
-            {t.label}
-          </button>
+            <i className={`${tab.icon} mr-1 text-[10px]`} />
+            <span className={tab.color}>{tab.name}</span>
+          </div>
         ))}
       </div>
+
       {/* Spotify Recents */}
-      {tab === "spotify" && (
+      {activeTab === "spotify" && (
         <div className="space-y-3">
           {!spotifyTracks.length && (
             <div className="text-monokai-fg2 text-sm">
@@ -125,8 +140,9 @@ export function MusicWindow({
           ))}
         </div>
       )}
-      {/* Local tracks tab */}
-      {tab === "local" && (
+
+      {/* Local Tracks */}
+      {activeTab === "local" && (
         <div className="grid grid-cols-3 gap-4 p-2">
           {localTracks.map((t) => (
             <div
