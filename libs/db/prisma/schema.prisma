@@ -1,0 +1,64 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+/** ---------- ENUMS ---------- **/
+enum FsKind {
+  folder
+  file
+  link
+
+  @@map("fs_kind")            // DB enum type name
+}
+
+/** ---------- MODELS ---------- **/
+model FsNode {
+  id        String   @id @default(uuid())
+  name      String
+  kind      FsKind
+  mime      String?
+  ext       String?
+  size      Int?
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt      @map("updated_at")
+  parentId  String?  @map("parent_id")
+  // relations (no columns created for these)
+  children  FsEdge[]  @relation("ParentToChild")
+  parents   FsEdge[]  @relation("ChildToParent")
+  media     FsMedia?
+  meta      Json?           // ✅ audio metadata cache
+  @@index([kind, name])
+  @@map("fs_node")             // DB table name
+}
+
+model FsEdge {
+  id        String @id @default(uuid())
+  parentId  String @map("parent_id")
+  childId   String @map("child_id")
+
+  parent    FsNode @relation("ParentToChild", fields: [parentId], references: [id], onDelete: Cascade)
+  child     FsNode @relation("ChildToParent", fields: [childId], references: [id], onDelete: Cascade)
+
+  @@unique([parentId, childId])
+  @@index([parentId])
+  @@index([childId])
+  @@map("fs_edge")             // DB table name
+}
+
+model FsMedia {
+  id        String  @id @default(uuid())
+  nodeId    String  @unique @map("node_id")
+  duration  Float?
+  bitrate   Int?
+  coverRef  String? @map("cover_ref")
+  waveform  String?
+
+  node      FsNode  @relation(fields: [nodeId], references: [id], onDelete: Cascade)
+
+  @@map("fs_media")            // DB table name
+}

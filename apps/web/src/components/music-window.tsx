@@ -1,14 +1,14 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { PrimeWindow } from "./prime-window";
-import { FileExplorerWindow } from "./file-explorer-window";
-import { Kernel } from "../kernel/kernel";
+import { Explorer } from "./fs/explorer";
+import { FsClient } from "../lib/fs-client";
 
 export function MusicWindow({
   onClose,
-  onSelectTrack,
+  onSelectTrack: _onSelectTrack,
 }: {
   onClose: () => void;
-  onSelectTrack: (track: {
+  onSelectTrack?: (track: {
     id: string;
     name: string;
     artist: string;
@@ -16,105 +16,103 @@ export function MusicWindow({
     url: string;
   }) => void;
 }) {
-  const [activeTab, setActiveTab] = useState<"spotify" | "local">("spotify");
+  const [musicFolderId, setMusicFolderId] = useState<string | null>(null);
+  const [ready, setReady] = useState(false); // ⬅️ gate Explorer mount
+  const [error, setError] = useState<string | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const [reloadKey, setReloadKey] = useState(0);
+  const initRef = useRef(false);
 
-  const handleOpen = (file: {
-    id: string;
-    name: string;
-    artist?: string;
-    album?: string;
-    cover?: string;
-    url?: string;
-    kind?: string;
-  }) => {
-    const url = file.url || "";
-    const isNeoAudio = file.kind === "neo/audio" && !!url;
-    if (isNeoAudio) {
-      // Notify kernel listeners (player/app) with existing event contract
-      Kernel.events.emit("audio:file:dropped", {
-        id: file.id,
-        name: file.name,
-        type: "neo/audio",
-        blobUrl: url,
-        meta: { artist: file.artist, album: file.album, cover: file.cover },
-      });
-      // Update dock UI via parent handler
-      onSelectTrack({
-        id: file.id,
-        name: file.name,
-        artist: file.artist || "",
-        cover: file.cover,
-        url,
-      });
-      return;
+  useEffect(() => {
+    if (initRef.current) return;
+    initRef.current = true;
+
+    (async () => {
+      try {
+        // 1) Look for "Music" at root
+        const root = await FsClient.list({ parentId: null, take: 200 });
+        const music = root.items.find(
+          (n) => n.kind === "folder" && n.name.toLowerCase() === "music"
+        );
+        // 2) Create if missing
+        const folder =
+          music ?? (await FsClient.createFolder("Music", null)).node;
+        setMusicFolderId(folder.id);
+      } catch (e: any) {
+        setError(e?.message ?? "Failed to initialize Music folder");
+      } finally {
+        setReady(true); // ⬅️ now safe to render Explorer
+      }
+    })();
+  }, []);
+
+  async function handleUpload(file: File) {
+    if (!file || !musicFolderId) return;
+    try {
+      setUploading(true);
+      await FsClient.uploadMultipart(musicFolderId, file);
+      setReloadKey((k) => k + 1); // refresh listing
+    } catch (e: any) {
+      alert(`Upload failed: ${e?.message || e}`);
+    } finally {
+      setUploading(false);
     }
-    // For list-only items (e.g., neo/audio-list), open external link as fallback
-    if (url) window.open(url, "_blank", "noopener,noreferrer");
-  };
-
-  const tabs = [
-    {
-      key: "spotify",
-      name: "spotify-recents",
-      color: "text-monokai-green",
-      icon: "fa-brands fa-spotify",
-    },
-    {
-      key: "local",
-      name: "local-tracks",
-      color: "text-monokai-cyan",
-      icon: "fa-solid fa-music",
-    },
-  ];
+  }
 
   return (
     <PrimeWindow
-      title="Music Studio"
+      title="Music"
       icon="fa-music"
       color="text-monokai-green"
       onClose={onClose}
     >
-      {/* Tab bar (matches Quantum / Readme style) */}
-      <div className="flex items-center space-x-2 border-b border-monokai-border pb-1 mb-3 text-xs font-mono">
-        {tabs.map((tab) => (
-          <div
-            key={tab.key}
-            onClick={() => setActiveTab(tab.key as "spotify" | "local")}
-            className={`px-3 py-1 rounded-t-md select-none ${
-              activeTab === tab.key
-                ? "bg-[#2e2e2e] text-monokai-fg border-t border-x border-monokai-border"
-                : "text-monokai-fg2 hover:text-monokai-fg1 cursor-pointer"
-            }`}
-          >
-            <i className={`${tab.icon} mr-1 text-[10px]`} />
-            <span className={tab.color}>{tab.name}</span>
-          </div>
-        ))}
+      {/* Top bar */}
+      <div className="flex items-center justify-between border-b border-zinc-800 px-2 py-2 text-sm">
+        <div className="text-zinc-300">
+          <span className="text-monokai-green">Music</span>
+          <span className="text-zinc-500"> / </span>
+          <span>Library</span>
+        </div>
+
+        <label className="btn cursor-pointer">
+          {uploading ? "Uploading…" : "⬆ Upload MP3"}
+          <input
+            type="file"
+            accept="audio/mpeg,audio/*"
+            hidden
+            onChange={async (e) => {
+              const f = e.currentTarget.files?.[0];
+              if (f) await handleUpload(f);
+              // e.currentTarget.value = "";
+            }}
+          />
+        </label>
       </div>
 
-      {/* Spotify Recents (embedded read-only explorer) */}
-      {activeTab === "spotify" && (
-        <FileExplorerWindow
-          onClose={onClose}
-          embedded
-          readOnly
-          rootFolderId="music"
-          initialFolderId="spotify-recent"
-          onOpenFile={handleOpen}
-        />
+      {error && (
+        <div className="p-3 text-sm text-red-400 border-b border-zinc-800">
+          {error}
+        </div>
       )}
 
-      {/* Local Tracks (embedded read-only explorer) */}
-      {activeTab === "local" && (
-        <FileExplorerWindow
-          onClose={onClose}
-          embedded
-          readOnly
-          rootFolderId="music"
-          initialFolderId="local-tracks"
-          onOpenFile={handleOpen}
+      {/* Only mount Explorer after we know the folder id */}
+      {!ready ? (
+        <div className="p-4 text-zinc-400">Initializing Music…</div>
+      ) : musicFolderId ? (
+        <Explorer
+          key={reloadKey}
+          parentId={musicFolderId}
+          onEnterFolder={() => {}}
         />
+      ) : (
+        <div className="p-4 text-red-400">Music folder unavailable.</div>
       )}
+
+      <div className="p-2 border-t border-zinc-800 text-sm text-zinc-400">
+        Tip: drop audio files into{" "}
+        <span className="text-monokai-green">Music</span> to organize your
+        library.
+      </div>
     </PrimeWindow>
   );
 }

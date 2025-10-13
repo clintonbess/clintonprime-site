@@ -6,14 +6,13 @@ import {
   faMusic,
   faAtom,
   faFileLines,
+  faFolder,
 } from "@fortawesome/free-solid-svg-icons";
 import { QuantumWindow } from "./quantum-window";
 import { ProgrammingWindow } from "./programming-window";
 import { MusicWindow } from "./music-window";
 import { ReadmeWindow } from "./readme-window";
-import { FileExplorerWindow } from "./file-explorer-window";
-import { faFolder } from "@fortawesome/free-solid-svg-icons";
-
+import { FileWindow } from "./windows/file-window"; // ✅ single file window
 import SpotifyWidget from "./widgets/spotify-widget";
 import { Kernel } from "../kernel/kernel";
 import { useDragContext } from "../context/drag-context";
@@ -30,9 +29,6 @@ function GlobalDragCue() {
   );
 }
 
-/* Global Music Player Dock (bottom-left corner) */
-// MusicPlayerDock removed in favor of dedicated music-player app UI
-
 /* Desktop Environment */
 export function DesktopEnvironment() {
   const [activeWindow, setActiveWindow] = useState<
@@ -40,6 +36,7 @@ export function DesktopEnvironment() {
   >(null);
 
   const [currentTrack, setCurrentTrack] = useState<any>(null);
+
   // Subscribe to OS-level open events and update currentTrack (prefer blobUrl)
   useEffect(() => {
     return Kernel.events.on<any>("neo.audio.open", (desc: any) => {
@@ -68,8 +65,8 @@ export function DesktopEnvironment() {
       }
     };
   }, [(currentTrack as any)?.blobUrl]);
-  const [time, setTime] = useState(new Date());
 
+  const [time, setTime] = useState(new Date());
   useEffect(() => {
     const interval = setInterval(() => setTime(new Date()), 1000);
     return () => clearInterval(interval);
@@ -219,9 +216,8 @@ export function DesktopEnvironment() {
         <MusicWindow onClose={closeWindow} onSelectTrack={setCurrentTrack} />
       )}
       {activeWindow === "quantum" && <QuantumWindow onClose={closeWindow} />}
-      {activeWindow === "explorer" && (
-        <FileExplorerWindow onClose={closeWindow} />
-      )}
+      {activeWindow === "explorer" && <FileWindow onClose={closeWindow} />}
+
       {/* Global single drag cue */}
       <GlobalDragCue />
     </div>

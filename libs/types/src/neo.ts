@@ -1,24 +1,13 @@
 // Generic Neo file types for cross-app usage
 
-export type NeoKind = "neo/audio" | "neo/video" | "neo/project" | string;
-
-export interface NeoFileBase {
+export interface NeoFileBase<M = Record<string, unknown>> {
   id: string;
   name: string;
-  kind: NeoKind;
-  cover?: string;
-  tags?: string[];
-  meta?: Record<string, any>;
-}
-
-export interface NeoFileMusic extends NeoFileBase {
-  kind: "neo/audio";
-  artist: string;
-  album?: string;
-  source: {
-    url: string; // blob: or https:
-    origin: "local" | "spotify" | "remote";
-  };
+  mime: string;
+  url: string;
+  size?: number;
+  meta?: M;
+  kind?: string;
 }
 
 // Generic explorer nodes (folders/files) for list/grid UIs
@@ -29,14 +18,10 @@ export interface NeoNodeBase {
   name: string;
   nodeType: NeoNodeType;
   parentId?: string | null;
+  children?: (NeoFolderNode | NeoFileNode)[];
 }
 
 export interface NeoFolderNode extends NeoNodeBase {
   nodeType: "folder";
 }
-
-export interface NeoFileNode<TFile extends NeoFileBase = NeoFileBase>
-  extends NeoNodeBase {
-  nodeType: "file";
-  file: TFile;
-}
+export type NeoFileNode<T extends NeoFileBase<any> = NeoFileBase<any>> = T;

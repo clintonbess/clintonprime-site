@@ -1,29 +1,34 @@
 import { useState, useEffect } from "react";
+import type {
+  NeoFolderNode,
+  NeoFileNode,
+  NeoFileBase,
+} from "@clintonprime/types";
 
-export interface FileNode {
-  id: string;
-  name: string;
-  // TODO: define all possible types
-  type: "folder" | "document" | "playlist" | "collection";
-  parentId: string | null;
-  children?: FileNode[];
-}
+type FsNode = NeoFolderNode | NeoFileNode<NeoFileBase>;
 
-const MOCK_TREE: FileNode[] = [
+const MOCK_TREE: FsNode[] = [
   {
     id: "root",
     name: "Home",
-    type: "folder",
+    nodeType: "folder",
     parentId: null,
     children: [
-      { id: "a1", name: "Projects", type: "folder", parentId: "root" },
-      { id: "a2", name: "Notes.txt", type: "document", parentId: "root" },
+      { id: "a1", name: "Projects", nodeType: "folder", parentId: "root" },
+      {
+        id: "a2",
+        name: "Notes.txt",
+        kind: "neo/project",
+        mime: "text/plain",
+        url: "",
+        size: 0,
+      },
     ],
   },
 ];
 
 export function useFileSystem() {
-  const [tree, setTree] = useState<FileNode[]>(() => {
+  const [tree, setTree] = useState<FsNode[]>(() => {
     const saved = localStorage.getItem("fileSystem");
     return saved ? JSON.parse(saved) : MOCK_TREE;
   });
@@ -32,8 +37,12 @@ export function useFileSystem() {
     localStorage.setItem("fileSystem", JSON.stringify(tree));
   }, [tree]);
 
-  const getChildren = (parentId: string | null) =>
-    tree.find((n) => n.id === parentId)?.children ?? [];
+  const getChildren = (parentId: string | null) => {
+    const node = tree.find((n) => n.id === parentId);
+    return Array.isArray((node as any)?.children)
+      ? ((node as any).children as FsNode[])
+      : [];
+  };
 
   return { tree, setTree, getChildren };
 }

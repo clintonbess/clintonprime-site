@@ -1,20 +1,21 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { PrimeWindow } from "./prime-window";
-import type {
-  NeoFolderNode,
-  NeoFileNode,
-  NeoFileBase,
-} from "@clintonprime/types";
+import type { NeoFolderNode, NeoFileBase } from "@clintonprime/types";
 import { Kernel } from "../kernel/kernel";
-// import { normalizeMp3File } from "../kernel/fs/audio-normalize"; // reserved for local file inputs
 import { GridView, ListView, type FsViewItem } from "../components/fs/fs-views";
 import type { osFile } from "@clintonprime/types";
 import { useSelection } from "../hooks/use-selection";
 
 type FileItem =
-  | NeoFolderNode
-  | (NeoFileNode<NeoFileBase> & { file?: NeoFileBase });
+  | (NeoFolderNode & { parentId: string | null })
+  | {
+      id: string;
+      name: string;
+      nodeType: "file";
+      parentId: string | null;
+      file?: NeoFileBase;
+    };
 
 type OnOpenPayload = {
   id: string;
@@ -31,12 +32,6 @@ const DEFAULT_FILES: FileItem[] = [
   { id: "2", name: "Playlists", nodeType: "folder", parentId: null },
   { id: "music", name: "Music", nodeType: "folder", parentId: null },
   {
-    id: "spotify-recent",
-    name: "spotify-recent",
-    nodeType: "folder",
-    parentId: "music",
-  },
-  {
     id: "local-tracks",
     name: "local-tracks",
     nodeType: "folder",
@@ -45,6 +40,18 @@ const DEFAULT_FILES: FileItem[] = [
   { id: "5", name: "Vision Viewer", nodeType: "folder", parentId: "1" },
   { id: "7", name: "assets", nodeType: "folder", parentId: "5" },
 ];
+
+// Animation: stable variants so resize/move doesn't retrigger
+const FOLDER_VARIANTS = {
+  show: { opacity: 1, x: 0 },
+  exit: { opacity: 0, x: -10 },
+} as const;
+const FOLDER_TRANSITION = { duration: 0.25 } as const;
+
+// Session cache to prevent refetch on remounts during window drag/resize
+const LOCAL_MUSIC_CACHE_KEY = "cp_fs_local_music_cache_v1";
+// Prevent re-fetch when window is moved/re-mounted
+let DID_LOAD_LOCAL_MUSIC = false;
 
 export function FileExplorerWindow({
   onClose,
@@ -111,41 +118,34 @@ export function FileExplorerWindow({
     }
   }, [files, currentFolder, breadcrumb, viewMode]);
 
-  // --- Load Music folder contents (Spotify + Local mapped to Neo files) ---
+  // --- Load Music > local-tracks from backend (S3-backed) ---
   useEffect(() => {
-    (async () => {
+    if (DID_LOAD_LOCAL_MUSIC) return;
+    // Try session cache first to avoid re-fetching on window remounts
+    const cached = sessionStorage.getItem(LOCAL_MUSIC_CACHE_KEY);
+    if (cached) {
       try {
-        const res = await fetch("/api/spotify/recent");
-        if (res.ok) {
-          const data = await res.json();
-          const spotifyNodes: FileItem[] = (
-            Array.isArray(data.tracks) ? data.tracks.slice(0, 5) : []
-          ).map((t: any) => ({
-            id: `spotify-${t.id}`,
-            name: t.name,
-            nodeType: "file",
-            parentId: "spotify-recent",
-            file: {
-              id: t.id,
-              name: t.name,
-              kind: "neo/audio-list",
-              cover: t.image,
-              meta: { artist: t.artist, album: t.album, raw: t },
-            },
-          }));
+        const localNodes = JSON.parse(cached) as FileItem[];
+        if (Array.isArray(localNodes) && localNodes.length) {
           setFiles((prev) => {
             const filtered = prev.filter(
               (n) =>
                 !(
-                  n.parentId === "spotify-recent" &&
-                  String(n.id).startsWith("spotify-")
+                  n.parentId === "local-tracks" &&
+                  String(n.id).startsWith("local-")
                 )
             );
-            return [...filtered, ...spotifyNodes];
+            return [...filtered, ...localNodes];
           });
+          DID_LOAD_LOCAL_MUSIC = true;
+          return; // skip network
         }
       } catch {}
+    }
+
+    (async () => {
       try {
+        // Expected to be S3-sourced on the backend
         const res = await fetch("/api/music/tracks");
         if (res.ok) {
           const data = await res.json();
@@ -164,6 +164,7 @@ export function FileExplorerWindow({
               meta: { artist: t.artist, album: t.album, raw: t },
             },
           }));
+
           setFiles((prev) => {
             const filtered = prev.filter(
               (n) =>
@@ -172,7 +173,15 @@ export function FileExplorerWindow({
                   String(n.id).startsWith("local-")
                 )
             );
-            return [...filtered, ...localNodes];
+            const merged = [...filtered, ...localNodes];
+            try {
+              sessionStorage.setItem(
+                LOCAL_MUSIC_CACHE_KEY,
+                JSON.stringify(localNodes)
+              );
+            } catch {}
+            DID_LOAD_LOCAL_MUSIC = true;
+            return merged;
           });
         }
       } catch {}
@@ -240,6 +249,9 @@ export function FileExplorerWindow({
           id,
           name: `New File ${prev.length + 1}.txt`,
           kind: "neo/project",
+          mime: "application/octet-stream",
+          url: "",
+          size: 0,
         },
       },
     ]);
@@ -439,13 +451,14 @@ export function FileExplorerWindow({
       </div>
 
       {/* File list */}
-      <AnimatePresence mode="wait">
+      <AnimatePresence mode="wait" initial={false}>
         <motion.div
-          key={currentFolder ?? "root"}
-          initial={{ opacity: 0, x: 10 }}
-          animate={{ opacity: 1, x: 0 }}
-          exit={{ opacity: 0, x: -10 }}
-          transition={{ duration: 0.25 }}
+          key={currentFolder ?? "root"} // only changes when navigating folders
+          initial={false} // don't animate on every re-render
+          animate="show"
+          exit="exit"
+          variants={FOLDER_VARIANTS}
+          transition={FOLDER_TRANSITION}
         >
           {viewMode === "grid" ? (
             <GridView
@@ -455,7 +468,6 @@ export function FileExplorerWindow({
                 const f = visibleFiles.find((x) => x.id === id);
                 if (!f) return;
                 if (f.nodeType === "folder") return openFolder(f);
-                // your existing double-click open logic:
                 const file = (f as any).file;
                 const url: string | undefined = file?.meta?.raw?.url;
                 onOpenFile?.({
@@ -519,7 +531,6 @@ export function FileExplorerWindow({
               items={viewItems}
               onClick={handleClick}
               onDoubleClick={async (id) => {
-                // same as above
                 const f = visibleFiles.find((x) => x.id === id);
                 if (!f) return;
                 if (f.nodeType === "folder") return openFolder(f);
@@ -552,7 +563,6 @@ export function FileExplorerWindow({
                 }
               }}
               onDragStart={(e, id) => {
-                // same as above
                 const f = visibleFiles.find((x) => x.id === id);
                 if (!f || f.nodeType !== "file") return;
                 const file = (f as any).file;

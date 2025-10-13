@@ -1,19 +1,14 @@
 import React, { createContext, useContext, useState, useEffect } from "react";
-
-export type WindowLayout = {
-  x: number;
-  y: number;
-  width: number;
-  height: number;
-};
+import type { WindowLayoutState } from "../../../../libs/types/src/os/windowing";
 
 type LayoutContextType = {
-  layout: WindowLayout;
-  updateLayout: (partial: Partial<WindowLayout>) => void;
+  layout: WindowLayoutState;
+  updateLayout: (partial: Partial<WindowLayoutState>) => void;
   resetLayout: () => void;
 };
 
-const defaultLayout: WindowLayout = {
+const defaultLayout: WindowLayoutState = {
+  id: "default",
   x: 120,
   y: 120,
   width: 800,
@@ -31,7 +26,7 @@ export function WindowLayoutProvider({
 }: {
   children: React.ReactNode;
 }) {
-  const [layout, setLayout] = useState<WindowLayout>(() => {
+  const [layout, setLayout] = useState<WindowLayoutState>(() => {
     try {
       const saved = localStorage.getItem("primeos-layout");
       return saved ? JSON.parse(saved) : defaultLayout;
@@ -43,10 +38,11 @@ export function WindowLayoutProvider({
   const clamp = (value: number, min: number, max: number) =>
     Math.min(Math.max(value, min), max);
 
-  const sanitize = (l: WindowLayout): WindowLayout => {
+  const sanitize = (l: WindowLayoutState): WindowLayoutState => {
     const maxW = window.innerWidth - 100;
     const maxH = window.innerHeight - 100;
     return {
+      id: l.id,
       x: clamp(l.x, 0, maxW),
       y: clamp(l.y, 0, maxH),
       width: clamp(l.width, 400, window.innerWidth),
@@ -54,7 +50,7 @@ export function WindowLayoutProvider({
     };
   };
 
-  const updateLayout = (partial: Partial<WindowLayout>) => {
+  const updateLayout = (partial: Partial<WindowLayoutState>) => {
     setLayout((prev) => {
       const next = sanitize({ ...prev, ...partial });
       localStorage.setItem("primeos-layout", JSON.stringify(next));

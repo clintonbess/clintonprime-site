@@ -91,8 +91,13 @@ export async function refreshAccessTokenNow() {
   }
 }
 
-// run immediately on startup (non-blocking)
-void refreshAccessTokenNow();
+// In test environment, avoid background network work and console noise
+const isTestEnv = process.env.NODE_ENV === "test";
 
-// refresh every 50 minutes (token lasts 60)
-setInterval(() => void refreshAccessTokenNow(), 50 * 60 * 1000);
+if (!isTestEnv) {
+  // run immediately on startup (non-blocking)
+  void refreshAccessTokenNow();
+
+  // refresh every 50 minutes (token lasts 60)
+  setInterval(() => void refreshAccessTokenNow(), 50 * 60 * 1000);
+}
