@@ -12,19 +12,22 @@ export function PrimeTabsWindow({
   icon,
   onClose,
   tabs,
+  children,
 }: {
-  fs: FS;
-  title: string;
-  icon: string;
+  fs?: FS;
+  title?: string;
+  icon?: string;
   onClose?: () => void;
-  tabs: { id: string; label: string; path: string }[];
+  tabs?: { id: string; label: string; path: string }[];
+  children?: React.ReactNode;
 }) {
-  const [active, setActive] = useState(tabs[0]?.id);
+  const [active, setActive] = useState(tabs?.[0]?.id);
   const [content, setContent] = useState<Record<string, any>>({});
   const [viewMode, setViewMode] = useState<"list" | "grid">("list");
 
-  // load data for each tab on activation
+  // load data for each tab on activation (only when tabs provided)
   useEffect(() => {
+    if (!tabs?.length || !fs) return;
     (async () => {
       const tab = tabs.find((t) => t.id === active);
       if (!tab) return;
@@ -38,56 +41,68 @@ export function PrimeTabsWindow({
         setContent((c) => ({ ...c, [tab.id]: { type: "file", text: txt } }));
       }
     })();
-  }, [active]);
+  }, [active, tabs, fs]);
 
-  const current = tabs.find((t) => t.id === active);
-  const data = content[active];
+  const hasTabs = Boolean(tabs?.length);
+  const data = active ? content[active] : undefined;
 
   return (
-    <PrimeWindow title={title} icon={icon} onClose={onClose}>
+    <PrimeWindow
+      title={title ?? "App"}
+      icon={icon ?? "fa-window-maximize"}
+      onClose={onClose}
+    >
       <div className="flex flex-col h-full">
-        {/* Tabs Bar */}
-        <div className="flex items-center justify-between border-b border-white/10 p-2 bg-[#1e1e1e]">
-          <div className="flex space-x-2">
-            {tabs.map((t) => (
+        {hasTabs && (
+          <div className="flex items-center justify-between border-b border-white/10 p-2 bg-[#1e1e1e]">
+            <div className="flex space-x-2">
+              {tabs!.map((t) => (
+                <button
+                  key={t.id}
+                  onClick={() => setActive(t.id)}
+                  className={`px-3 py-1 rounded-md text-sm ${
+                    t.id === active
+                      ? "bg-monokai-green/20 text-monokai-green"
+                      : "text-monokai-fg1 hover:text-monokai-green/70"
+                  }`}
+                >
+                  {t.label}
+                </button>
+              ))}
+            </div>
+
+            {data?.type === "dir" && (
               <button
-                key={t.id}
-                onClick={() => setActive(t.id)}
-                className={`px-3 py-1 rounded-md text-sm ${
-                  t.id === active
-                    ? "bg-monokai-green/20 text-monokai-green"
-                    : "text-monokai-fg1 hover:text-monokai-green/70"
-                }`}
+                onClick={() =>
+                  setViewMode((m) => (m === "list" ? "grid" : "list"))
+                }
+                title={`Switch to ${
+                  viewMode === "list" ? "grid" : "list"
+                } view`}
+                className="text-monokai-fg1 hover:text-monokai-green transition"
               >
-                {t.label}
+                {viewMode === "list" ? <FaTh /> : <FaList />}
               </button>
-            ))}
+            )}
           </div>
+        )}
 
-          {/* View Toggle (only visible for dirs) */}
-          {data?.type === "dir" && (
-            <button
-              onClick={() =>
-                setViewMode((m) => (m === "list" ? "grid" : "list"))
-              }
-              title={`Switch to ${viewMode === "list" ? "grid" : "list"} view`}
-              className="text-monokai-fg1 hover:text-monokai-green transition"
-            >
-              {viewMode === "list" ? <FaTh /> : <FaList />}
-            </button>
-          )}
-        </div>
-
-        {/* Content */}
-        <div className="flex-1 overflow-y-auto p-4 font-mono text-sm">
-          {!data && <div className="opacity-60">Loading…</div>}
-          {data?.type === "dir" &&
+        <div className="flex-1 overflow-y-auto p-2 font-mono text-md">
+          {!hasTabs && children}
+          {hasTabs && !data && <div className="opacity-60">Loading…</div>}
+          {hasTabs &&
+            data?.type === "dir" &&
             (viewMode === "list" ? (
               <DirListView files={data.items} />
             ) : (
               <DirGridView files={data.items} />
             ))}
-          {data?.type === "file" && <TextViewer content={data.text} />}
+          {hasTabs && data?.type === "file" && (
+            <TextViewer
+              content={data.text}
+              style={active === "latest" ? "code" : "md"}
+            />
+          )}
         </div>
       </div>
     </PrimeWindow>

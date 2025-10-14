@@ -5,6 +5,7 @@ import type {
   UIWindow,
 } from "@clintonprime/types";
 import { EventBus } from "@clintonprime/os-core";
+import { renderMarkdown } from "../ui/render-markdown";
 
 export type AppModule = {
   default: (
@@ -21,7 +22,7 @@ export class AppManager {
   ) {}
 
   async launch(manifest: AppManifest, openPath?: string): Promise<void> {
-    const ui = { openWindow: this.openWindow };
+    const ui = { openWindow: this.openWindow, renderMarkdown };
     const ctx: AppContext = {
       manifest,
       fs: this.fs,

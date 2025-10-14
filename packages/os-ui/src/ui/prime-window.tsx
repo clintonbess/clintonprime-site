@@ -29,7 +29,6 @@ export function PrimeWindow({
     }
     centeredOnceRef.current = true;
   }, [layout.x, layout.y, layout.width, layout.height, updateLayout]);
-  console.log("prime window testing", children);
 
   return (
     <Rnd
@@ -85,7 +84,7 @@ export function PrimeWindow({
         </div>
 
         {/* Content */}
-        <div className="flex-1 overflow-y-auto p-4 text-monokai-fg1 font-mono text-sm bg-[#232323] editor-scrollbar">
+        <div className="flex-1 overflow-y-auto p-2 text-monokai-fg1 font-mono text-md bg-[#232323] editor-scrollbar">
           {children}
         </div>
       </div>

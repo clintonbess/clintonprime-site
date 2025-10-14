@@ -37,6 +37,10 @@ export interface UIWindow {
 
 export interface UI {
   openWindow(opts: { title?: string }): Promise<UIWindow>;
+  renderMarkdown(
+    src: string,
+    style?: "plain" | "code" | "md"
+  ): Promise<HTMLElement>;
 }
 
 export interface AppContext {

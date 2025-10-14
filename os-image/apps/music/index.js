@@ -1,7 +1,7 @@
 const { useState, useEffect } = React;
 
 export default async function boot({ fs, ui, bus }) {
-  const { mount } = await ui.openWindow({ title: "Music" });
+  const win = await ui.openWindow({ title: "Music" });
 
   function App() {
     const [files, setFiles] = useState([]);
@@ -76,5 +76,11 @@ export default async function boot({ fs, ui, bus }) {
     );
   }
 
-  mount(React.createElement(App));
+  win.mount(
+    React.createElement(
+      window.PrimeTabsWindow,
+      { icon: "fa-music" },
+      React.createElement(App)
+    )
+  );
 }
