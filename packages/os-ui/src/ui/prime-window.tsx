@@ -2,7 +2,6 @@ import type { ReactNode } from "react";
 import { Rnd } from "react-rnd";
 import { useEffect, useRef } from "react";
 import { useWindowLayout } from "../context/window-layout-context";
-
 export function PrimeWindow({
   title,
   icon,
@@ -18,7 +17,6 @@ export function PrimeWindow({
 }) {
   const { layout, updateLayout, resetLayout } = useWindowLayout();
   const centeredOnceRef = useRef(false);
-
   // One-time initial centering if x/y are 0
   useEffect(() => {
     if (centeredOnceRef.current) return;
@@ -31,6 +29,7 @@ export function PrimeWindow({
     }
     centeredOnceRef.current = true;
   }, [layout.x, layout.y, layout.width, layout.height, updateLayout]);
+  console.log("prime window testing", children);
 
   return (
     <Rnd

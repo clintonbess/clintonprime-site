@@ -1,5 +1,5 @@
-export default function boot(ctx) {
-  const win = ctx.ui.openWindow({ title: "Viewer" });
+export default async function boot(ctx) {
+  const win = await ctx.ui.openWindow({ title: "Viewer" });
   const div = document.createElement("div");
   div.textContent =
     "Viewer booted. Double-click a README shortcut to open a file.";

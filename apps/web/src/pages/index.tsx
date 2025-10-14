@@ -1,8 +1,10 @@
-// apps/web/src/pages/index.tsx
 import { useEffect, useRef } from "react";
 import { MountableFS, OverlayFS, MemoryFS } from "@clintonprime/os-core";
 import { bootOS } from "@clintonprime/os-ui";
 import { loadSystemImageToMemoryFS } from "../boot/fs-from-zip";
+
+import * as React from "react";
+window.React = React;
 
 export default function IndexPage() {
   const osContainerRef = useRef<HTMLDivElement>(null);
@@ -23,7 +25,7 @@ export default function IndexPage() {
       router
         .mount("/system", new OverlayFS(upper, lower))
         .mount("/home", new MemoryFS())
-        .mount("/music", new MemoryFS());
+        .mount("/music", new OverlayFS(new MemoryFS(), lower.subdir("/music")));
 
       if (cancelled) return;
 

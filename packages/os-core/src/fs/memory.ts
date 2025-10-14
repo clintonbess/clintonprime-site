@@ -157,4 +157,19 @@ export class MemoryFS implements FS {
   async exists(path: string): Promise<boolean> {
     return !!this.getNode(path);
   }
+
+  subdir(prefix: string): FS {
+    const base = normalize(prefix);
+    const wrap = (p: string) => normalize(`${base}/${p}`);
+    return {
+      readFile: (p, o) => this.readFile(wrap(p), o),
+      writeFile: (p, d, o) => this.writeFile(wrap(p), d, o),
+      readdir: (p) => this.readdir(wrap(p)),
+      mkdir: (p, o) => this.mkdir(wrap(p), o),
+      stat: (p) => this.stat(wrap(p)),
+      rename: (a, b) => this.rename(wrap(a), wrap(b)),
+      unlink: (p) => this.unlink(wrap(p)),
+      exists: (p) => this.exists(wrap(p)),
+    };
+  }
 }

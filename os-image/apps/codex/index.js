@@ -1,5 +1,7 @@
+const { createElement } = window.React;
+
 export default async function boot(ctx) {
-  const win = ctx.ui.openWindow({ title: "Prime Codex" });
+  const win = await ctx.ui.openWindow({ title: "Prime Codex" });
   // 1) Ensure target folder
   const HOME = "/home/codex";
   if (!(await ctx.fs.exists(HOME)))
@@ -22,35 +24,9 @@ export default async function boot(ctx) {
     await ctx.fs.writeFile(seededMarker, "ok");
   }
 
-  // 3) Super-simple UI for now (tab buttons, render markdown as plain text)
-  const root = document.createElement("div");
-  root.style.fontFamily = "ui-monospace, monospace";
-  win.mount(root);
-
-  function button(label, onClick) {
-    const b = document.createElement("button");
-    b.textContent = label;
-    b.style.marginRight = "8px";
-    b.onclick = onClick;
-    return b;
-  }
-
-  const tabs = document.createElement("div");
-  tabs.style.marginBottom = "12px";
-  tabs.append(
-    button("About", () => open(`${HOME}/about.md`)),
-    button("Latest", () => open(`${HOME}/latest.md`)),
-    button("Lore Log", () => open(`${HOME}/lore-log.md`))
-  );
-
-  const viewer = document.createElement("pre"); // MVP: plain text
-  viewer.style.whiteSpace = "pre-wrap";
-  viewer.style.lineHeight = "1.5";
-  root.append(tabs, viewer);
-
   async function open(path) {
     const txt = await ctx.fs.readFile(path, { encoding: "utf8" });
-    viewer.textContent = txt;
+    // viewer.textContent = txt;
     win.setTitle(`Prime Codex — ${path.split("/").pop()}`);
   }
 
@@ -63,6 +39,21 @@ export default async function boot(ctx) {
     await ctx.fs.writeFile(e.path, prev + e.text + "\n", { createDirs: true });
     if (win) viewer.textContent = prev + e.text + "\n";
   });
+
+  const tabs = [
+    { id: "about", label: "About", path: `${HOME}/about.md` },
+    { id: "latest", label: "Latest", path: `${HOME}/latest.md` },
+    { id: "lore", label: "Lore Log", path: `${HOME}/lore-log.md` },
+  ];
+
+  win.mount(
+    React.createElement(window.PrimeTabsWindow, {
+      fs: ctx.fs,
+      title: "Prime Codex",
+      icon: "fa-book",
+      tabs,
+    })
+  );
 
   // Open default tab on first show
   open(`${HOME}/about.md`);

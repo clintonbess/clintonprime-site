@@ -28,18 +28,15 @@ export interface EventBus {
   ): () => void;
 }
 
+export interface UIWindow {
+  mount(node: React.ReactNode): void;
+  setTitle(title: string): void;
+  focus(): void;
+  close(): void;
+}
+
 export interface UI {
-  openWindow(opts: {
-    title?: string;
-    width?: number;
-    height?: number;
-    resizable?: boolean;
-  }): {
-    mount(node: React.ReactNode): void;
-    setTitle(title: string): void;
-    focus(): void;
-    close(): void;
-  };
+  openWindow(opts: { title?: string }): Promise<UIWindow>;
 }
 
 export interface AppContext {

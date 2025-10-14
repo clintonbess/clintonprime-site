@@ -43,9 +43,10 @@ export async function bootOS(opts: { fs: FS; target?: HTMLElement }) {
   const manager = new AppManager(
     fs,
     bus,
-    (init) => {
+    async (init) => {
       const id = ++winId;
-      const { WindowShell, api } = createWindowHost();
+      const { WindowShell, ready } = createWindowHost();
+
       const element = (
         <WindowShell
           key={id}
@@ -59,13 +60,21 @@ export async function bootOS(opts: { fs: FS; target?: HTMLElement }) {
           }}
         />
       );
+
       windows.push(element);
       render();
+
+      const api = await ready;
       return api;
     },
     importFromFS
   );
-
+  console.log("[bootOS] Rendering desktop...");
   render();
   return { fs, bus, registry, manager, root };
 }
+
+import { PrimeTabsWindow } from "./ui/prime-tabs-window";
+
+window.React = React;
+window.PrimeTabsWindow = PrimeTabsWindow;

@@ -15,6 +15,8 @@
     "build:site": "pnpm build",
     "build:api": "pnpm --filter @clintonprime/api build",
     "build:all": "pnpm --filter @clintonprime/types build && pnpm build:os-image && pnpm --filter @clintonprime/web build && pnpm --filter @clintonprime/api build",
+    "build:types": "pnpm --filter @clintonprime/types build",
+    "build:os-ui": "pnpm --filter @clintonprime/os-ui build",
     "//:image": "=== OS image ===",
     "build:os-image": "tsx scripts/build-os-image.ts",
     "//:start": "=== START (API only) ===",

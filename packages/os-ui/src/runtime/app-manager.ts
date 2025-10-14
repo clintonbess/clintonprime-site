@@ -1,4 +1,9 @@
-import type { FS, AppContext, AppManifest } from "@clintonprime/types";
+import type {
+  FS,
+  AppContext,
+  AppManifest,
+  UIWindow,
+} from "@clintonprime/types";
 import { EventBus } from "@clintonprime/os-core";
 
 export type AppModule = {
@@ -7,18 +12,11 @@ export type AppModule = {
   ) => void | (() => void) | Promise<void | (() => void)>;
 };
 
-type OpenWindow = (opts: { title?: string }) => {
-  mount(node: React.ReactNode): void;
-  setTitle(title: string): void;
-  focus(): void;
-  close(): void;
-};
-
 export class AppManager {
   constructor(
     private fs: FS,
     private bus: EventBus,
-    private openWindow: OpenWindow,
+    private openWindow: (opts: { title?: string }) => Promise<UIWindow>,
     private importFromFS: (fs: FS, path: string) => Promise<AppModule>
   ) {}
 
@@ -37,8 +35,8 @@ export class AppManager {
       console.error(`[AppManager] No default export for ${manifest.id}`);
       return;
     }
-    const teardown = await mod.default(ctx);
 
+    const teardown = await mod.default(ctx);
     if (openPath) this.bus.emit({ type: "os.open", path: openPath });
     void teardown;
   }
