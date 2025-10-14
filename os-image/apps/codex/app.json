@@ -1,0 +1,6 @@
+{
+  "id": "codex",
+  "name": "Prime Codex",
+  "icon": "/system/icons/app/codex.svg",
+  "entry": "/system/apps/codex/index.js"
+}

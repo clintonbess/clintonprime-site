@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { PrimeWindow } from "./prime-window";
+import { PrimeWindow } from "../components/prime-window";
 import { VibeStateFile } from "./vibe-state-file";
 
 export function QuantumWindow({ onClose }: { onClose: () => void }) {

@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">
+  <title>Quantum Reality</title>
+  <defs>
+    <linearGradient id="gQ" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#AE81FF"/>
+      <stop offset="1" stop-color="#66D9EF"/>
+    </linearGradient>
+    <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="2" result="b"/>
+      <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+
+  <rect x="10" y="10" width="44" height="44" rx="8" fill="#121212" stroke="#ffffff22"/>
+
+  <!-- hex core -->
+  <g stroke="url(#gQ)" stroke-width="2" fill="none" filter="url(#glow)">
+    <polygon points="32,18 43,24 43,38 32,44 21,38 21,24"/>
+    <!-- inner -->
+    <polygon points="32,23 39,27 39,35 32,39 25,35 25,27"/>
+  </g>
+
+  <!-- orbitals -->
+  <g stroke="url(#gQ)" stroke-width="1.5" opacity="0.75" filter="url(#glow)">
+    <ellipse cx="32" cy="32" rx="18" ry="8" fill="none"/>
+    <ellipse cx="32" cy="32" rx="8" ry="18" fill="none"/>
+  </g>
+
+  <circle cx="32" cy="32" r="2.2" fill="url(#gQ)" filter="url(#glow)"/>
+</svg>

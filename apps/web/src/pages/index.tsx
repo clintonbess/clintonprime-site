@@ -1,45 +1,58 @@
+// apps/web/src/pages/index.tsx
 import { useEffect, useRef } from "react";
-import { WindowLayoutProvider } from "../context/window-layout-context";
-import { DragProvider } from "../context/drag-context";
-import { DesktopEnvironment } from "../components/desktop-environment";
-import { BootSequence } from "../components/boot-sequence";
-
-import { Kernel } from "../kernel/kernel";
-// import { DropZone } from "../dropzone"; // global overlay removed; player has scoped dropzone
+import { MountableFS, OverlayFS, MemoryFS } from "@clintonprime/os-core";
+import { bootOS } from "@clintonprime/os-ui";
+import { loadSystemImageToMemoryFS } from "../boot/fs-from-zip";
 
 export default function IndexPage() {
-  // Where the music-player app will mount
-  const appRootRef = useRef<HTMLDivElement>(null);
+  const osContainerRef = useRef<HTMLDivElement>(null);
+  const bootRef = useRef<null | { unmount: () => void }>(null);
 
   useEffect(() => {
-    // Ensure the app is registered (already done in main.tsx, but safe to re-call)
-    Kernel.register({
-      id: "music-player",
-      name: "Music Player",
-      entry: () => import("../apps/music-player/main"),
+    let cancelled = false;
+
+    (async () => {
+      if (typeof window === "undefined") return;
+      const target = osContainerRef.current;
+      if (!target || target.dataset.booted === "1") return;
+
+      // FS mounts
+      const router = new MountableFS();
+      const lower = await loadSystemImageToMemoryFS("/assets/os-image-v1.zip");
+      const upper = new MemoryFS();
+      router
+        .mount("/system", new OverlayFS(upper, lower))
+        .mount("/home", new MemoryFS())
+        .mount("/music", new MemoryFS());
+
+      if (cancelled) return;
+
+      // Boot once
+      const { root } = await bootOS({ fs: router, target });
+      target.dataset.booted = "1";
+      bootRef.current = { unmount: () => root.unmount() };
+
+      // @ts-ignore for quick dev pokes
+      window.__fs = router;
+    })().catch((e) => {
+      console.error("OS boot failed:", e);
+      if (osContainerRef.current) {
+        osContainerRef.current.innerHTML = `<pre style="color:#f55">${String(
+          e
+        )}</pre>`;
+      }
     });
 
-    // Boot kernel capabilities once
-    Kernel.boot();
-
-    if (appRootRef.current) {
-      Kernel.launch("music-player", appRootRef.current);
-    }
+    return () => {
+      cancelled = true;
+      if (bootRef.current) {
+        bootRef.current.unmount();
+        bootRef.current = null;
+        if (osContainerRef.current)
+          delete osContainerRef.current.dataset.booted;
+      }
+    };
   }, []);
 
-  return (
-    <WindowLayoutProvider>
-      <DragProvider>
-        <BootSequence />
-        <DesktopEnvironment />
-
-        {/* Mount node for the music-player app (inside your current application) */}
-        <div
-          id="app-root"
-          ref={appRootRef}
-          className="fixed bottom-0 left-0 right-0 z-40 mx-4 mb-6"
-        />
-      </DragProvider>
-    </WindowLayoutProvider>
-  );
+  return <div ref={osContainerRef} className="relative w-full min-h-[80vh]" />;
 }

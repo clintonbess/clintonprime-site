@@ -8,13 +8,13 @@ import {
   faFileLines,
   faFolder,
 } from "@fortawesome/free-solid-svg-icons";
-import { QuantumWindow } from "./quantum-window";
-import { ProgrammingWindow } from "./programming-window";
-import { MusicWindow } from "./music-window";
-import { ReadmeWindow } from "./readme-window";
+import { QuantumWindow } from "../_archive/quantum-window";
+import { ProgrammingWindow } from "../_archive/programming-window";
+import { MusicWindow } from "../_archive/music-window";
+import { ReadmeWindow } from "../_archive/readme-window";
 import { FileWindow } from "./windows/file-window"; // ✅ single file window
 import SpotifyWidget from "./widgets/spotify-widget";
-import { Kernel } from "../kernel/kernel";
+import { Kernel } from "../_archive/kernel/kernel";
 import { useDragContext } from "../context/drag-context";
 
 function GlobalDragCue() {

@@ -1,10 +1,10 @@
 // apps/web/src/apps/music-player/main.tsx
 import React from "react";
 import { createRoot } from "react-dom/client";
-import type { NeoContext } from "../../kernel/types";
+import type { NeoContext } from "../../_archive/kernel/types";
 import type { osFile } from "@clintonprime/types";
-import { normalizeMp3File } from "../../kernel/fs/audio-normalize";
-import { Kernel } from "../../kernel/kernel";
+import { normalizeMp3File } from "../../_archive/kernel/fs/audio-normalize";
+import { Kernel } from "../../_archive/kernel/kernel";
 
 /** Utility: mm:ss */
 function fmt(t: number) {

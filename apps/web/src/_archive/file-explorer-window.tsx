@@ -1,8 +1,8 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { PrimeWindow } from "./prime-window";
+import { PrimeWindow } from "../components/prime-window";
 import type { NeoFolderNode, NeoFileBase } from "@clintonprime/types";
-import { Kernel } from "../kernel/kernel";
+import { Kernel } from "./kernel/kernel";
 import { GridView, ListView, type FsViewItem } from "../components/fs/fs-views";
 import type { osFile } from "@clintonprime/types";
 import { useSelection } from "../hooks/use-selection";

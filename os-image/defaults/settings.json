@@ -1,0 +1,11 @@
+{
+  "theme": "monokai",
+  "desktop": {
+    "grid": true
+  },
+  "explorer": {
+    "view": "grid"
+  },
+  "volume": 0.8,
+  "recent": []
+}

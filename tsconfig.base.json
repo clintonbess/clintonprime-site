@@ -1,0 +1,16 @@
+{
+  "compilerOptions": {
+    "baseUrl": ".",
+    "paths": {
+      "@clintonprime/types": [
+        "libs/types/src/index.ts"
+      ],
+      "@clintonprime/os-core/*": [
+        "packages/os-core/src/*"
+      ],
+      "@clintonprime/os-ui/*": [
+        "packages/os-ui/src/*"
+      ]
+    }
+  }
+}

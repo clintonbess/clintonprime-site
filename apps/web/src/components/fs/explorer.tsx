@@ -3,7 +3,7 @@ import { GridView, ListView, type FsViewItem } from "../fs/fs-views";
 import { useFs, useViewMode } from "../../hooks/use-fs";
 import { useSelection } from "../../hooks/use-selection";
 import { FsClient } from "../../lib/fs-client";
-import { Kernel } from "../../kernel/kernel"; // ⟵ added
+import { Kernel } from "../../_archive/kernel/kernel"; // ⟵ added
 import type { osFile } from "@clintonprime/types"; // ⟵ added
 
 type Props = { parentId: string | null; onEnterFolder?: (id: string) => void };

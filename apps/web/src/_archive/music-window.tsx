@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
-import { PrimeWindow } from "./prime-window";
-import { Explorer } from "./fs/explorer";
+import { PrimeWindow } from "../components/prime-window";
+import { Explorer } from "../components/fs/explorer";
 import { FsClient } from "../lib/fs-client";
 
 export function MusicWindow({

@@ -3,8 +3,7 @@ import ReactDOM from "react-dom/client";
 import "./lib/fontawesome";
 import "./index.css";
 import IndexPage from "./pages/index";
-
-import { Kernel } from "./kernel/kernel";
+import { Kernel } from "./_archive/kernel/kernel";
 
 Kernel.register({
   id: "music-player",

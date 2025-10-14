@@ -10,3 +10,5 @@ export * as osKernel from "./os/kernel/index.js";
 export * from "./fs/index.js";
 
 // export * as fs from "./fs/index.js";
+export * from "./os/fs";
+export * from "./os/app";

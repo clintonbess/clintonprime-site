@@ -70,6 +70,9 @@ async function main() {
     await zipTarget(projectRoot, "libs/db");
     await zipTarget(projectRoot, "libs/types");
     await zipTarget(projectRoot, "apps/web");
+    await zipTarget(projectRoot, "packages/os-ui");
+    await zipTarget(projectRoot, "packages/os-core");
+    await zipTarget(projectRoot, "os-image");
   } else {
     // Custom target
     await zipTarget(projectRoot, arg);

@@ -1,0 +1,9 @@
+{
+  "id": "viewer",
+  "name": "Viewer",
+  "icon": "/system/icons/app/viewer.svg",
+  "entry": "/system/apps/viewer/index.js",
+  "associations": [
+    ".md"
+  ]
+}

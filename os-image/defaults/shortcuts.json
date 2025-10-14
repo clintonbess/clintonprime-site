@@ -1,0 +1,18 @@
+[
+  {
+    "appId": "codex"
+  },
+  {
+    "appId": "viewer",
+    "open": "/system/README.md"
+  },
+  {
+    "appId": "music"
+  },
+  {
+    "appId": "quantum"
+  },
+  {
+    "appId": "explorer"
+  }
+]

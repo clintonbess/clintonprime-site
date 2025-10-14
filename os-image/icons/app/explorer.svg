@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">
+  <title>Explorer</title>
+  <defs>
+    <radialGradient id="gExpl" cx="50%" cy="50%" r="60%">
+      <stop offset="0" stop-color="#66D9EF"/>
+      <stop offset="1" stop-color="#AE81FF"/>
+    </radialGradient>
+    <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="2" result="b"/>
+      <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+
+  <circle cx="32" cy="32" r="22" fill="#1b1b1b" stroke="#ffffff22"/>
+  <circle cx="32" cy="32" r="20" fill="none" stroke="url(#gExpl)" stroke-width="2" filter="url(#glow)"/>
+
+  <!-- latitude / longitude -->
+  <g stroke="#ffffff22" stroke-width="1">
+    <ellipse cx="32" cy="32" rx="14" ry="20" fill="none"/>
+    <ellipse cx="32" cy="32" rx="20" ry="12" fill="none"/>
+  </g>
+
+  <!-- compass needle -->
+  <g filter="url(#glow)">
+    <path d="M32 16l6 12-6 20-6-12z" fill="url(#gExpl)" stroke="#ffffff33"/>
+    <circle cx="32" cy="32" r="3" fill="#1b1b1b" stroke="#ffffff55"/>
+  </g>
+</svg>

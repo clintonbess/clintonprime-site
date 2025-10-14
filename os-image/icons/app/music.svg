@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">
+  <title>Music</title>
+  <defs>
+    <linearGradient id="gMusic" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#F92672"/>
+      <stop offset="1" stop-color="#FD971F"/>
+    </linearGradient>
+    <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="2.2" result="b"/>
+      <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+
+  <circle cx="32" cy="32" r="22" fill="#161616" stroke="#ffffff22"/>
+  <circle cx="32" cy="32" r="20" fill="none" stroke="url(#gMusic)" stroke-width="2.5" filter="url(#glow)"/>
+
+  <!-- note -->
+  <g fill="url(#gMusic)" stroke="#ffffff33" filter="url(#glow)">
+    <path d="M26 41a4 4 0 1 0 0 8 4 4 0 0 0 0-8zm0 0V23l18-4v9l-10 2v14a4 4 0 1 0 2 3.5V30l8-1.6V15l-20 4v22z"/>
+  </g>
+</svg>

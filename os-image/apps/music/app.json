@@ -1,0 +1,10 @@
+{
+  "id": "music",
+  "name": "Music",
+  "icon": "/system/icons/app/music.svg",
+  "entry": "/system/apps/music/index.js",
+  "associations": [
+    ".mp3",
+    ".wav"
+  ]
+}

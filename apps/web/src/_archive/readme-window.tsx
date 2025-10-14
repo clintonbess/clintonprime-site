@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { PrimeWindow } from "./prime-window";
+import { PrimeWindow } from "../components/prime-window";
 
 export function ReadmeWindow({ onClose }: { onClose: () => void }) {
   const [activeTab, setActiveTab] = useState<"readme" | "mechanica" | "log">(
