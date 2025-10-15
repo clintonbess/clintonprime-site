@@ -1,4 +1,5 @@
-import { FS, Stat, normalize, dirname, basename } from "./types";
+import { normalize, dirname, basename } from "./types";
+import type { FS, Stat } from "./types";
 
 /**
  * OverlayFS: writable upper over read-only lower.

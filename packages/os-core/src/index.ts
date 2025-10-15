@@ -6,7 +6,7 @@ export { EventBus } from "./events/bus";
 
 // convenience starter
 import { MountableFS } from "./fs/router";
-import { FS } from "./fs/types";
+import type { FS } from "./fs/types";
 
 export function createFS(): MountableFS {
   return new MountableFS();

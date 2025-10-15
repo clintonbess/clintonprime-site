@@ -75,6 +75,11 @@ export async function bootOS(opts: { fs: FS; target?: HTMLElement }) {
 }
 
 import { PrimeTabsWindow } from "./ui/prime-tabs-window";
+declare global {
+  interface Window {
+    PrimeTabsWindow?: any;
+  }
+}
 
 window.React = React;
 window.PrimeTabsWindow = PrimeTabsWindow;

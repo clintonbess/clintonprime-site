@@ -1,4 +1,5 @@
-import { FS, Stat, normalize } from "./types";
+import { normalize } from "./types";
+import type { FS, Stat } from "./types";
 
 type Mount = { prefix: string; fs: FS };
 
