@@ -20,39 +20,31 @@ function escapeHtml(text: string): string {
   return text.replace(/[&<>"']/g, (m) => map[m]);
 }
 
-// Configure marked with custom code rendering (v5+ safe)
+// Configure marked with custom rendering (v5+ safe)
 const renderer: RendererObject = {
-  code({ raw, lang }) {
-    const code = raw || "";
-    const language = lang || "typescript";
-    const validLang =
-      language && hljs.getLanguage(language) ? language : "typescript";
-    const highlighted = hljs.highlight(code, { language: validLang }).value;
+  // Highlight fenced code blocks with highlight.js
+  code({ text, lang }) {
+    const sourceCode = text || "";
+    // Map short aliases to registered languages
+    const alias =
+      lang === "ts" ? "typescript" : lang === "js" ? "javascript" : lang;
+    const fallback = "typescript";
+    const language = alias && hljs.getLanguage(alias) ? alias : fallback;
+    const highlighted = hljs.highlight(sourceCode, { language }).value;
 
     return `
       <pre class="code-editor font-mono text-sm leading-tight">
-        <code class="hljs ${validLang}">${highlighted}</code>
+        <code class="hljs ${language}">${highlighted}</code>
       </pre>
     `;
   },
+  // Ensure inline/raw HTML blocks render as actual HTML (not escaped)
+  html({ raw }) {
+    return raw ?? "";
+  },
 };
 
-// ✅ Allow raw HTML rendering by setting `async: false` and `hooks` overrides
-marked.use({
-  renderer,
-  gfm: true,
-  breaks: false,
-  async: false,
-  hooks: {
-    // This hook allows HTML tags through untouched
-    preprocess(markdown) {
-      return markdown;
-    },
-    postprocess(html) {
-      return html;
-    },
-  },
-});
+marked.use({ renderer, gfm: true, breaks: false, async: false });
 
 /**
  * Renders Monokai-themed markdown or code snippet.
@@ -77,7 +69,7 @@ export async function renderMarkdown(src: string, style: MarkdownStyle = "md") {
       footer = `<div class="text-center text-xl font-semibold text-monokai-cyan mt-3">${match}</div>`;
     }
 
-    const highlighted = hljs.highlight(src, { language: "javascript" }).value;
+    const highlighted = hljs.highlight(src, { language: "typescript" }).value;
     el.innerHTML = `
       <div class="code-editor font-mono text-sm leading-tight">
         <pre class="code-line">${highlighted}</pre>
@@ -87,7 +79,7 @@ export async function renderMarkdown(src: string, style: MarkdownStyle = "md") {
     return el;
   }
 
-  // Markdown mode (async-safe)
+  // Markdown mode (async-safe). marked.parse may be Promise<string> if async.
   const html = await marked.parse(src);
   el.innerHTML = html;
   return el;

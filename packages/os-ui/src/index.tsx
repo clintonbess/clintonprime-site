@@ -75,8 +75,6 @@ export async function bootOS(opts: { fs: FS; target?: HTMLElement }) {
 }
 
 import { PrimeTabsWindow } from "./ui/prime-tabs-window";
-import { FaTruckMonster } from "react-icons/fa";
-import { FaBucket } from "react-icons/fa6";
 
 window.React = React;
 window.PrimeTabsWindow = PrimeTabsWindow;

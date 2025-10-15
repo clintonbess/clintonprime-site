@@ -1,21 +1,24 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">
-  <title>Music</title>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none">
   <defs>
-    <linearGradient id="gMusic" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#F92672"/>
-      <stop offset="1" stop-color="#FD971F"/>
-    </linearGradient>
-    <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
-      <feGaussianBlur stdDeviation="2.2" result="b"/>
-      <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+    <filter id="circuitGlow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="2.4" result="b"/><feMerge>
+        <feMergeNode in="b"/><feMergeNode in="SourceGraphic"/>
+      </feMerge>
     </filter>
   </defs>
 
-  <circle cx="32" cy="32" r="22" fill="#161616" stroke="#ffffff22"/>
-  <circle cx="32" cy="32" r="20" fill="none" stroke="url(#gMusic)" stroke-width="2.5" filter="url(#glow)"/>
+  <!-- filled note -->
+  <path id="noteBody"
+    d="M44 8v29.5c0 4.6-3.7 8.3-8.3 8.3s-8.3-3.7-8.3-8.3 3.7-8.3 8.3-8.3c2 0 3.8.7 5.2 1.8V18.8L27 22.2v21c0 4.6-3.7 8.3-8.3 8.3S10.4 47.8 10.4 43.2s3.7-8.3 8.3-8.3c2 0 3.8.7 5.2 1.8V16.2c0-.9.6-1.6 1.4-1.8l16.6-4.1c.6-.2 1.1 0 1.5.4.3.3.5.7.5 1.1Z"
+    fill="var(--color-monokai-orange, #FF9D00)" filter="url(#circuitGlow)"/>
 
-  <!-- note -->
-  <g fill="url(#gMusic)" stroke="#ffffff33" filter="url(#glow)">
-    <path d="M26 41a4 4 0 1 0 0 8 4 4 0 0 0 0-8zm0 0V23l18-4v9l-10 2v14a4 4 0 1 0 2 3.5V30l8-1.6V15l-20 4v22z"/>
+  <!-- PCB traces (clipped to note) -->
+  <clipPath id="clipNote"><use href="#noteBody"/></clipPath>
+  <g clip-path="url(#clipNote)" stroke="#FFD580" stroke-opacity=".55" stroke-width="1.2" stroke-linecap="round">
+    <path d="M18 44h10l6-6h12"/>
+    <path d="M18 38h8l4-4h12"/>
+    <path d="M30 48h6l8-8"/>
+    <circle cx="28" cy="38" r="1.6" fill="#FFD580"/><circle cx="40" cy="36" r="1.6" fill="#FFD580"/>
+    <circle cx="48" cy="38" r="1.4" fill="#FFD580"/><circle cx="22" cy="44" r="1.4" fill="#FFD580"/>
   </g>
 </svg>

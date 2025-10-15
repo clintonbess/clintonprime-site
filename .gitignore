@@ -5,3 +5,4 @@ dist/
 *.zip
 knip-result.json
 **/*.code-workspace
+libs/api/public/*

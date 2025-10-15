@@ -8,7 +8,7 @@ export const Desktop: React.FC<{
   onLaunch: (m: AppManifest) => void;
 }> = ({ fs, apps, onLaunch }) => {
   return (
-    <div className="w-full h-full grid grid-cols-6 gap-8 p-8 place-items-start">
+    <div className="absolute top-12 left-4 flex flex-col gap-6 p-2">
       {apps.map((m) => (
         <button
           key={m.id}
@@ -19,7 +19,7 @@ export const Desktop: React.FC<{
             fs={fs}
             path={m.icon}
             alt={m.name}
-            className="w-12 h-12"
+            className="w-24 h-24"
             onErrorFallback={
               <i className="fa-solid fa-cube text-3xl text-monokai-green" />
             }

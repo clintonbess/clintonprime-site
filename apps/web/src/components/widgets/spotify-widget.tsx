@@ -40,9 +40,9 @@ export default function SpotifyWidget() {
 
   if (!track) return null;
 
-  const label = track.isPlaying ? "now playing" : "last played";
+  const label = track.isPlaying ? "now listening to" : "last played";
   const color = track.isPlaying
-    ? "text-[var(--color-monokai-green)]"
+    ? "text-[var(--color-monokai-magenta)]"
     : "text-[var(--color-monokai-fg2)]";
 
   return (
@@ -88,13 +88,13 @@ export default function SpotifyWidget() {
             className="w-2 h-2 rounded-full bg-[var(--color-monokai-green)] shadow-[0_0_6px_rgba(166,226,46,0.55)]"
           />
         )}
-        <div className="uppercase text-[10px] tracking-wider font-semibold">
+        <div className="text-[10px] tracking-wider font-semibold">
           <span
             className="font-bold bg-gradient-to-r from-[var(--color-monokai-green)]
                        via-[var(--color-monokai-blue)] to-[var(--color-monokai-cyan)]
                        bg-clip-text text-transparent pr-1"
           >
-            clintonprime
+            ClintonPrime
           </span>
           <span className={color}>{label}</span>
         </div>

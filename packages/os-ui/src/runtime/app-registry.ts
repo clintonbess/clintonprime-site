@@ -31,6 +31,7 @@ export class AppRegistry {
   get(id: string): AppManifest | undefined {
     return this.byId.get(id);
   }
+
   list(): AppManifest[] {
     return Array.from(this.byId.values());
   }

@@ -10,7 +10,7 @@ export default async function boot(ctx) {
   // 🧱 Seed files if missing
   const seededMarker = `${HOME}/.seeded`;
   const needsSeed = !(await ctx.fs.exists(seededMarker));
-  const files = ["about.md", "latest.md", "lore-log.md"];
+  const files = ["about.md", "latest.ts", "lore-log.md"];
 
   if (needsSeed) {
     for (const f of files) {
@@ -34,7 +34,7 @@ export default async function boot(ctx) {
     const name = path.split("/").pop();
 
     const txt = await ctx.fs.readFile(path, { encoding: "utf8" });
-    const style = name === "latest.md" ? "code" : "md";
+    const style = name === "latest.ts" ? "code" : "md";
     const el = await ctx.ui.renderMarkdown(txt, style);
     container.replaceChildren(el);
 
@@ -58,7 +58,7 @@ export default async function boot(ctx) {
   // 🗂 Tabs
   const tabs = [
     { id: "about", label: "About", path: `${HOME}/about.md` },
-    { id: "latest", label: "Latest", path: `${HOME}/latest.md` },
+    { id: "latest", label: "Latest", path: `${HOME}/latest.ts` },
     { id: "lore", label: "Lore Log", path: `${HOME}/lore-log.md` },
   ];
 

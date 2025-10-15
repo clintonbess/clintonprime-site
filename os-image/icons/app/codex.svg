@@ -1,36 +1,25 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">
-  <title>Prime Codex</title>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none">
   <defs>
-    <linearGradient id="gCodex" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#78DCE8"/>
-      <stop offset="1" stop-color="#A6E22E"/>
+    <linearGradient id="c1" x1="16" y1="14" x2="48" y2="50">
+      <stop offset="0" stop-color="var(--color-monokai-cyan, #66D9EF)"/>
+      <stop offset="1" stop-color="var(--color-monokai-blue, #5AA7FF)"/>
     </linearGradient>
-    <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
-      <feGaussianBlur stdDeviation="2" result="b"/>
-      <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
-    </filter>
-    <pattern id="scan" width="4" height="4" patternUnits="userSpaceOnUse">
-      <rect width="4" height="4" fill="none"/>
-      <rect width="4" height="1" y="0" fill="#ffffff0d"/>
-    </pattern>
   </defs>
 
-  <rect x="8" y="8" width="40" height="48" rx="4" fill="#1f1f1f" stroke="#ffffff22"/>
-  <rect x="10" y="10" width="36" height="44" rx="3" fill="url(#scan)"/>
-
-  <!-- spine circuits -->
-  <g stroke="url(#gCodex)" stroke-width="1.5" opacity="0.85" filter="url(#glow)">
-    <path d="M14 14v36" />
-    <path d="M18 16v8m0 4v12m0 4v4" />
-    <circle cx="18" cy="28" r="1.5" fill="#A6E22E"/>
-    <circle cx="18" cy="44" r="1.5" fill="#78DCE8"/>
+  <!-- Cover -->
+  <rect x="14" y="12" width="36" height="40" rx="4.5" fill="rgba(102,217,239,0.06)" stroke="url(#c1)" stroke-width="2"/>
+  <!-- Spine -->
+  <rect x="14" y="12" width="6" height="40" rx="3" fill="rgba(90,167,255,0.15)"/>
+  <!-- Pages (right edge lines) -->
+  <g stroke="var(--color-monokai-cyan, #66D9EF)" opacity=".65">
+    <line x1="46" y1="18" x2="50" y2="18"/>
+    <line x1="46" y1="22" x2="50" y2="22"/>
+    <line x1="46" y1="26" x2="50" y2="26"/>
+    <line x1="46" y1="30" x2="50" y2="30"/>
+    <line x1="46" y1="34" x2="50" y2="34"/>
+    <line x1="46" y1="38" x2="50" y2="38"/>
+    <line x1="46" y1="42" x2="50" y2="42"/>
   </g>
-
-  <!-- rune A5 -->
-  <g fill="none" stroke="url(#gCodex)" stroke-width="2.5" filter="url(#glow)">
-    <path d="M24 42l8-20 8 20" />
-    <path d="M28 32h8" />
-    <!-- small 5 glyph -->
-    <path d="M36 26h6c2 0 2 3 0 3h-4c-2 0-2 3 0 3h6" stroke-width="2"/>
-  </g>
+  <!-- Subtle rune on cover -->
+  <path d="M26 28h10M26 32h7" stroke="var(--color-monokai-cyan, #66D9EF)" stroke-width="2" stroke-linecap="round" opacity=".85"/>
 </svg>
