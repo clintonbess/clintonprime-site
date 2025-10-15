@@ -55,7 +55,7 @@ jobs:
           pnpm build
           # Reinstall deps with npm for portable node_modules and install local workspace packages via file: paths
           cp package.json package.orig.json
-          node -e "const fs=require('fs');const p=JSON.parse(fs.readFileSync('package.orig.json','utf8'));p.dependencies=p.dependencies||{};if(p.dependencies['@clintonprime/types'])p.dependencies['@clintonprime/types']='file:../../libs/types';if(p.dependencies['@clintonprime/os-core'])p.dependencies['@clintonprime/os-core']='file:../../packages/os-core';if(p.dependencies['@clintonprime/os-ui'])p.dependencies['@clintonprime/os-ui']='file:../../packages/os-ui';fs.writeFileSync('package.json',JSON.stringify(p,null,2));"
+          node -e "const fs=require('fs');const p=JSON.parse(fs.readFileSync('package.orig.json','utf8'));['@clintonprime/types','@clintonprime/os-core','@clintonprime/os-ui','@clintonprime/db'].forEach((k)=>{if(p.dependencies&&p.dependencies[k]){p.dependencies[k]=k.includes('/types')?'file:../../libs/types':k.includes('/db')?'file:../../libs/db':k.includes('/os-core')?'file:../../packages/os-core':'file:../../packages/os-ui';}});fs.writeFileSync('package.json',JSON.stringify(p,null,2));"
           rm -rf node_modules package-lock.json
           npm i --omit=dev
           # If npm created symlinks for workspace packages, replace them with real directories
