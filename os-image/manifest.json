@@ -1,0 +1,7 @@
+{
+  "name": "clintonprime-os-lite-image",
+  "version": "1.0.0",
+  "boot": {
+    "init": "/boot/init.js"
+  }
+}

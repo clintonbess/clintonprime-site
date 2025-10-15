@@ -1,0 +1,6 @@
+{
+  "id": "explorer",
+  "name": "Explorer",
+  "icon": "/system/icons/app/explorer.svg",
+  "entry": "/system/apps/explorer/index.js"
+}

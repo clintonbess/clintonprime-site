@@ -13,16 +13,24 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.908.0",
+    "@aws-sdk/lib-storage": "^3.908.0",
+    "@aws-sdk/s3-request-presigner": "^3.908.0",
+    "@clintonprime/db": "workspace:*",
     "@clintonprime/types": "workspace:*",
+    "@prisma/client": "^6.17.1",
     "@types/express": "^5.0.3",
     "@types/morgan": "^1.9.10",
+    "@types/multer": "^2.0.0",
     "@types/spotify-web-api-node": "^5.0.11",
     "axios": "^1.12.2",
     "dotenv": "^17.2.3",
     "express": "^5.1.0",
     "morgan": "^1.10.1",
+    "multer": "^2.0.2",
     "music-metadata": "^11.9.0",
-    "spotify-web-api-node": "^5.0.2"
+    "spotify-web-api-node": "^5.0.2",
+    "zod": "^3.25.76"
   },
   "devDependencies": {
     "tsx": "^4.20.6",

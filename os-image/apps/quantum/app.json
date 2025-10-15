@@ -1,0 +1,6 @@
+{
+  "id": "quantum",
+  "name": "Quantum Reality",
+  "icon": "/system/icons/app/quantum.svg",
+  "entry": "/system/apps/quantum/index.js"
+}

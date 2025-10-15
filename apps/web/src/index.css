@@ -1,19 +1,20 @@
 @import "tailwindcss";
-/* @plugin "tailwindcss-animate" */
 @import "tw-animate-css";
 
 @custom-variant dark (&:is(.dark *));
 
 @font-face {
   font-family: "JetBrains Mono";
-  src: url("/fonts/jetbrains-mono/JetBrainsMono-Variable.woff2") format("woff2");
+  src: url("/fonts/JetBrains/jetbrains-mono/JetBrainsMono-Variable.woff2")
+    format("woff2");
   font-weight: 100 800; /* full range */
   font-style: normal;
   font-display: swap;
 }
 @font-face {
   font-family: "JetBrains Mono";
-  src: url("/fonts/jetbrains-mono/JetBrainsMono-Variable.woff2") format("woff2");
+  src: url("/fonts/JetBrains/jetbrains-mono/JetBrainsMono-Variable.woff2")
+    format("woff2");
   font-weight: 100 800;
   font-style: italic;
   font-display: swap;
@@ -21,24 +22,63 @@
 
 @font-face {
   font-family: "JetBrains Mono";
-  src: url("/fonts/jetbrains-mono/JetBrainsMono-Regular.woff2") format("woff2");
+  src: url("/fonts/JetBrains/jetbrains-mono/JetBrainsMono-Regular.woff2")
+    format("woff2");
   font-weight: 400;
   font-style: normal;
   font-display: swap;
 }
 @font-face {
   font-family: "JetBrains Mono";
-  src: url("/fonts/jetbrains-mono/JetBrainsMono-Italic.woff2") format("woff2");
+  src: url("/fonts/JetBrains/jetbrains-mono/JetBrainsMono-Italic.woff2")
+    format("woff2");
   font-weight: 400;
   font-style: italic;
   font-display: swap;
 }
 @font-face {
   font-family: "JetBrains Mono";
-  src: url("/fonts/jetbrains-mono/JetBrainsMono-Bold.woff2") format("woff2");
+  src: url("/fonts/JetBrains/jetbrains-mono/JetBrainsMono-Bold.woff2")
+    format("woff2");
   font-weight: 700;
   font-style: normal;
   font-display: swap;
+}
+/* Courier Prime Font */
+@font-face {
+  font-family: "Courier Prime";
+  src: url("/fonts/CourierPrime/CourierPrime-Regular.ttf") format("truetype");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Courier Prime";
+  src: url("/fonts/CourierPrime/CourierPrime-Bold.ttf") format("truetype");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Courier Prime";
+  src: url("/fonts/CourierPrime/CourierPrime-Italic.ttf") format("truetype");
+  font-weight: 400;
+  font-style: italic;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Courier Prime";
+  src: url("/fonts/CourierPrime/CourierPrime-BoldItalic.ttf") format("truetype");
+  font-weight: 700;
+  font-style: italic;
+  font-display: swap;
+}
+
+.font-courier {
+  font-family: "Courier Prime", "Courier New", Courier, monospace;
 }
 
 /* Monokai Palette Reference */
@@ -95,9 +135,7 @@
   color: var(--color-monokai-accent);
 }
 
-body {
-  @apply bg-monokai-bg text-monokai-text;
-}
+/* Base body styles are defined via shadcn tokens below */
 
 @theme inline {
   --radius-sm: calc(var(--radius) - 4px);
@@ -172,8 +210,8 @@ body {
   --sidebar-border: var(--color-monokai-violet);
   --sidebar-ring: oklch(0.8269 0.108 211.9627);
   --font-sans: JetBrains Mono, ui-monospace, monospace;
-  --font-serif: Courier New, monospace;
-  --font-mono: Courier New, monospace;
+  --font-serif: JetBrains New, monospace;
+  --font-mono: JetBrains Mono, monospace;
 
   --radius: 0.3rem;
   --shadow-2xs: 0px 4px 8px 6.5px hsl(0 0% 10.1961% / 0.05);
@@ -304,20 +342,15 @@ body {
 }
 
 /* Inline blocks for highlighting */
-.code-line {
-  display: block;
-  font-family: "JetBrains Mono", monospace;
-  line-height: 1.5;
-  white-space: pre;
-}
+/* .code-line defined later with consolidated settings */
 
 /* Background for code panels */
 .code-editor {
-  background-color: var(--color-monokai-bg1);
+  box-shadow: inset 0 0 20px rgba(0, 0, 0, 0.35);
   border: 1px solid var(--color-monokai-border);
-  border-radius: 0.5rem;
-  padding: 1rem;
-  box-shadow: 0 0 20px rgba(0, 0, 0, 0.4) inset;
+  background: var(--color-monokai-bg1);
+  border-radius: 8px;
+  padding: 0.75rem 1rem;
 }
 
 /* Selection/hover states similar to Sublime */
@@ -427,4 +460,157 @@ body {
 }
 .scroll-thin:hover::-webkit-scrollbar-thumb {
   opacity: 1;
+}
+
+.markdown-view {
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+  color: var(--color-monokai-fg0);
+  line-height: 1.6;
+  padding: 0.1rem;
+}
+
+/* Markdown headings / emphasis */
+.markdown-md h1,
+.markdown-md h2,
+.markdown-md h3 {
+  color: var(--color-monokai-green);
+  font-weight: 600;
+  margin-top: 1em;
+}
+.markdown-md a {
+  color: var(--color-monokai-blue);
+  text-decoration: none;
+}
+.markdown-md code {
+  background-color: var(--color-monokai-bg1);
+  color: var(--color-monokai-yellow);
+  padding: 0.2em 0.4em;
+  border-radius: 4px;
+}
+.markdown-md pre code {
+  display: block;
+  background-color: var(--color-monokai-bg1);
+  border-radius: 8px;
+  padding: 1rem;
+}
+
+/* Plain text */
+.markdown-plain {
+  white-space: pre-wrap;
+  color: var(--color-monokai-fg1);
+}
+
+/* Code variant — uses existing syntax classes */
+.markdown-code {
+  background: var(--color-monokai-bg1);
+  border: 1px solid var(--color-monokai-border);
+  border-radius: 0.5rem;
+  box-shadow: 0 0 20px rgba(0, 0, 0, 0.4) inset;
+}
+
+.code-line {
+  display: block;
+  line-height: 1.2;
+  font-family: "JetBrains Mono", monospace;
+  white-space: pre;
+  letter-spacing: 0.01em;
+}
+
+/* === highlight.js → Monokai TypeScript mapping (editor-accurate) === */
+.hljs {
+  color: var(--color-monokai-fg1);
+  background: transparent;
+  font-family: "JetBrains Mono", monospace;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+/* --- Core keywords / flow --- */
+
+.hljs-keyword {
+  color: var(--color-monokai-pink);
+}
+.hljs-selector-tag,
+.hljs-literal,
+.hljs-built_in,
+.hljs-decorator .hljs-operator,
+.hljs-punctuation {
+  color: var(--color-monokai-cyan); /* let, import, class, extends */
+}
+
+/* --- Types / Interfaces / Class names --- */
+.hljs-type,
+.hljs-interface,
+.hljs-constructor {
+  color: var(--color-monokai-fg0);
+}
+
+/* --- Function names --- */
+.hljs-function .hljs-title,
+.hljs-title.function_,
+.hljs-method,
+.hljs-title.class_,
+.hljs-title.method_ {
+  color: var(--color-monokai-green);
+}
+
+/* --- Variables / identifiers --- */
+.hljs-variable,
+.hljs-property,
+.hljs-identifier {
+  color: var(--color-monokai-fg0); /* plain white */
+}
+
+.hljs-attr {
+  color: var(--color-monokai-orange);
+}
+
+/* --- Strings / template literals --- */
+.hljs-string,
+.hljs-meta-string,
+.hljs-template-variable,
+.hljs-subst {
+  color: var(--color-monokai-yellow);
+}
+
+/* --- Numbers / constants --- */
+.hljs-number,
+.hljs-literal.number,
+.hljs-symbol,
+.hljs-builtin-name {
+  color: var(--color-monokai-violet);
+}
+
+/* --- Comments --- */
+.hljs-comment,
+.hljs-quote {
+  color: var(--color-monokai-fg2);
+  font-style: italic;
+}
+
+/* --- Parameters (function args) --- */
+.hljs-params,
+.hljs-parameter {
+  color: var(--color-monokai-fg1);
+}
+
+/* --- Annotations / decorators --- */
+.hljs-meta,
+.hljs-annotation {
+  color: var(--color-monokai-pink);
+}
+
+/* --- Highlighted line glow --- */
+.hljs-line-highlight {
+  background: rgba(166, 226, 46, 0.05);
+  box-shadow: inset 0 0 8px rgba(102, 217, 239, 0.2);
+}
+
+/* --- Block code wrapper --- */
+.markdown-code pre code {
+  display: block;
+  background-color: var(--color-monokai-bg1);
+  border-radius: 8px;
+  padding: 1rem;
+  box-shadow: inset 0 0 20px rgba(0, 0, 0, 0.4);
 }

@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">
+  <title>Viewer</title>
+  <defs>
+    <linearGradient id="gV" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#A6E22E"/>
+      <stop offset="1" stop-color="#66D9EF"/>
+    </linearGradient>
+    <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="2" result="b"/>
+      <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <pattern id="scan" width="4" height="4" patternUnits="userSpaceOnUse">
+      <rect width="4" height="4" fill="none"/>
+      <rect width="4" height="1" y="0" fill="#ffffff0d"/>
+    </pattern>
+  </defs>
+
+  <!-- page -->
+  <path d="M16 14h24l8 8v28a4 4 0 0 1-4 4H16a4 4 0 0 1-4-4V18a4 4 0 0 1 4-4z"
+        fill="#1b1b1b" stroke="#ffffff22"/>
+  <path d="M40 14v8h8" fill="none" stroke="#ffffff22"/>
+  <rect x="16" y="22" width="32" height="28" fill="url(#scan)"/>
+
+  <!-- eye -->
+  <g fill="none" stroke="url(#gV)" stroke-width="2" filter="url(#glow)">
+    <path d="M20 38c4-6 10-9 16-9s12 3 16 9c-4 6-10 9-16 9s-12-3-16-9z"/>
+    <circle cx="36" cy="38" r="4" fill="url(#gV)" />
+  </g>
+</svg>

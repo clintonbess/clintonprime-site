@@ -1,6 +1,6 @@
 import fs from "node:fs";
 
-const reportFile = "knip-result.json"; // run knip --json > knip-result.json
+const reportFile = "knip-result.json";
 const allow = new Set(
   fs
     .readFileSync("tools/cleanup-allowlist.txt", "utf8")

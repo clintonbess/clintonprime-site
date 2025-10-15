@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none">
+  <defs>
+    <linearGradient id="c1" x1="16" y1="14" x2="48" y2="50">
+      <stop offset="0" stop-color="var(--color-monokai-cyan, #66D9EF)"/>
+      <stop offset="1" stop-color="var(--color-monokai-blue, #5AA7FF)"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Cover -->
+  <rect x="14" y="12" width="36" height="40" rx="4.5" fill="rgba(102,217,239,0.06)" stroke="url(#c1)" stroke-width="2"/>
+  <!-- Spine -->
+  <rect x="14" y="12" width="6" height="40" rx="3" fill="rgba(90,167,255,0.15)"/>
+  <!-- Pages (right edge lines) -->
+  <g stroke="var(--color-monokai-cyan, #66D9EF)" opacity=".65">
+    <line x1="46" y1="18" x2="50" y2="18"/>
+    <line x1="46" y1="22" x2="50" y2="22"/>
+    <line x1="46" y1="26" x2="50" y2="26"/>
+    <line x1="46" y1="30" x2="50" y2="30"/>
+    <line x1="46" y1="34" x2="50" y2="34"/>
+    <line x1="46" y1="38" x2="50" y2="38"/>
+    <line x1="46" y1="42" x2="50" y2="42"/>
+  </g>
+  <!-- Subtle rune on cover -->
+  <path d="M26 28h10M26 32h7" stroke="var(--color-monokai-cyan, #66D9EF)" stroke-width="2" stroke-linecap="round" opacity=".85"/>
+</svg>
