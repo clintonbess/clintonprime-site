@@ -1,4 +1,5 @@
 import pkg from "@prisma/client";
+import type { Prisma } from "@prisma/client";
 const { FsKind } = pkg as any;
 import { prisma } from "@clintonprime/db";
 import type {
@@ -168,7 +169,7 @@ export const FsService = {
     toParentId: string | null
   ): Promise<{ moved: number }> {
     // enforce single-parent: delete old parent edges, then attach new (or detach to root if null)
-    await prisma.$transaction(async (tx: typeof prisma) => {
+    await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       await tx.fsEdge.deleteMany({ where: { childId: { in: ids } } });
       if (toParentId) {
         await tx.fsEdge.createMany({
