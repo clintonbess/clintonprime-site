@@ -58,6 +58,8 @@ jobs:
           node -e "const fs=require('fs');const p=JSON.parse(fs.readFileSync('package.orig.json','utf8'));p.dependencies=p.dependencies||{};const map={'@clintonprime/types':'file:../../libs/types','@clintonprime/os-core':'file:../../packages/os-core','@clintonprime/os-ui':'file:../../packages/os-ui','@clintonprime/db':'file:../../libs/db'};for(const k in map){if(p.dependencies[k])p.dependencies[k]=map[k];}fs.writeFileSync('package.json',JSON.stringify(p,null,2));"
           rm -rf node_modules package-lock.json
           npm i --omit=dev
+          # Ensure Prisma client is generated in this package using the monorepo schema
+          npx prisma generate --schema ../../libs/db/prisma/schema.prisma
           # Ensure workspace packages are materialized with dist/ (no symlinks, no missing dist)
           for PKG in types os-core os-ui db; do \
             DEST="node_modules/@clintonprime/$PKG"; \
