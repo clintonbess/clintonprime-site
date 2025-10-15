@@ -37,9 +37,10 @@ jobs:
           node-version: 20
 
       # ---------- WORKSPACE (build all: types, os-core, os-ui, os-image, web) ----------
-      - name: Install & Build Workspace
+      - name: Install & Build Workspace (clean)
         run: |
           pnpm install
+          pnpm -r --filter ./libs/types run clean || true
           pnpm run build
           test -f apps/web/dist/index.html
 
