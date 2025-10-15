@@ -36,21 +36,12 @@ jobs:
         with:
           node-version: 20
 
-      # ---------- WEB ----------
-      - name: Install & Build Types (shared package)
-        working-directory: libs/types
+      # ---------- WORKSPACE (build all: types, os-core, os-ui, os-image, web) ----------
+      - name: Install & Build Workspace
         run: |
           pnpm install
-          pnpm build
-          ls -lah dist
-          test -f dist/index.js
-
-      - name: Install & Build Web
-        working-directory: apps/web
-        run: |
-          pnpm install
-          pnpm build
-          test -f dist/index.html
+          pnpm run build
+          test -f apps/web/dist/index.html
 
       - name: Package Web Dist
         run: tar -C apps/web -czf web-dist.tar.gz dist
@@ -61,19 +52,22 @@ jobs:
         run: |
           pnpm install
           pnpm build
-          # Reinstall deps with npm for portable node_modules and install local @clintonprime/types via file: path
+          # Reinstall deps with npm for portable node_modules and install local workspace packages via file: paths
           cp package.json package.orig.json
-          node -e "const fs=require('fs');const p=JSON.parse(fs.readFileSync('package.orig.json','utf8'));p.dependencies=p.dependencies||{};if(p.dependencies['@clintonprime/types']){p.dependencies['@clintonprime/types']='file:../../libs/types';}fs.writeFileSync('package.json',JSON.stringify(p,null,2));"
+          node -e "const fs=require('fs');const p=JSON.parse(fs.readFileSync('package.orig.json','utf8'));p.dependencies=p.dependencies||{};if(p.dependencies['@clintonprime/types'])p.dependencies['@clintonprime/types']='file:../../libs/types';if(p.dependencies['@clintonprime/os-core'])p.dependencies['@clintonprime/os-core']='file:../../packages/os-core';if(p.dependencies['@clintonprime/os-ui'])p.dependencies['@clintonprime/os-ui']='file:../../packages/os-ui';fs.writeFileSync('package.json',JSON.stringify(p,null,2));"
           rm -rf node_modules package-lock.json
           npm i --omit=dev
-          # If npm created a symlink for @clintonprime/types, replace it with a real directory
-          if [ -L node_modules/@clintonprime/types ]; then \
-            rm -rf node_modules/@clintonprime/types; \
-            mkdir -p node_modules/@clintonprime/types; \
-            cp -r ../../libs/types/dist/. node_modules/@clintonprime/types/; \
-            cp ../../libs/types/package.json node_modules/@clintonprime/types/package.json; \
-            if [ -f ../../libs/types/index.d.ts ]; then cp ../../libs/types/index.d.ts node_modules/@clintonprime/types/index.d.ts; fi; \
-          fi
+          # If npm created symlinks for workspace packages, replace them with real directories
+          for PKG in types os-core os-ui; do \
+            if [ -L "node_modules/@clintonprime/$PKG" ]; then \
+              rm -rf "node_modules/@clintonprime/$PKG"; \
+              mkdir -p "node_modules/@clintonprime/$PKG"; \
+              SRC="../../$( [ "$PKG" = types ] && echo libs/types || echo packages/$PKG )"; \
+              cp -r "$SRC/dist/." "node_modules/@clintonprime/$PKG/" 2>/dev/null || true; \
+              cp "$SRC/package.json" "node_modules/@clintonprime/$PKG/package.json"; \
+              [ -f "$SRC/index.d.ts" ] && cp "$SRC/index.d.ts" "node_modules/@clintonprime/$PKG/index.d.ts" || true; \
+            fi; \
+          done
           mv -f package.orig.json package.json
           ls -lah dist
           test -f dist/index.js
