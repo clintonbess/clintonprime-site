@@ -1,4 +1,4 @@
-import "./env"; // ensures .env or .env.test is loaded first
+import "./env.js"; // ensures .env or .env.test is loaded first (ESM requires .js)
 import { PrismaClient } from "@prisma/client";
 
 // prevent hot-reload duplication in dev
