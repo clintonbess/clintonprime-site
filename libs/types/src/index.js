@@ -9,5 +9,5 @@ export * as osWindow from "./os/windowing/index.js";
 export * as osKernel from "./os/kernel/index.js";
 export * from "./fs/index.js";
 // export * as fs from "./fs/index.js";
-export * from "./os/fs";
-export * from "./os/app";
+export * from "./os/fs/index.js";
+export * from "./os/app/index.js";
