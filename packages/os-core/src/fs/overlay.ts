@@ -1,4 +1,4 @@
-import { normalize, dirname, basename } from "./types";
+import { normalize, dirname } from "./types";
 import type { FS, Stat } from "./types";
 
 /**
@@ -31,7 +31,6 @@ export class OverlayFS implements FS {
 
   private async addWhiteout(path: string): Promise<void> {
     const dir = dirname(path);
-    const name = basename(path);
     const woDir = this.whiteoutPath(dir);
     if (!(await this.upper.exists(woDir))) {
       await this.upper.mkdir(woDir, { recursive: true });
