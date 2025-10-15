@@ -55,13 +55,13 @@ jobs:
           pnpm build
           # Reinstall deps with npm for portable node_modules and install local workspace packages via file: paths
           cp package.json package.orig.json
-          node -e "const fs=require('fs');const p=JSON.parse(fs.readFileSync('package.orig.json','utf8'));['@clintonprime/types','@clintonprime/os-core','@clintonprime/os-ui','@clintonprime/db'].forEach((k)=>{if(p.dependencies&&p.dependencies[k]){p.dependencies[k]=k.includes('/types')?'file:../../libs/types':k.includes('/db')?'file:../../libs/db':k.includes('/os-core')?'file:../../packages/os-core':'file:../../packages/os-ui';}});fs.writeFileSync('package.json',JSON.stringify(p,null,2));"
+          node -e "const fs=require('fs');const p=JSON.parse(fs.readFileSync('package.orig.json','utf8'));p.dependencies=p.dependencies||{};const map={'@clintonprime/types':'file:../../libs/types','@clintonprime/os-core':'file:../../packages/os-core','@clintonprime/os-ui':'file:../../packages/os-ui','@clintonprime/db':'file:../../libs/db'};for(const k in map){if(p.dependencies[k])p.dependencies[k]=map[k];}fs.writeFileSync('package.json',JSON.stringify(p,null,2));"
           rm -rf node_modules package-lock.json
           npm i --omit=dev
           # Ensure workspace packages are materialized with dist/ (no symlinks, no missing dist)
-          for PKG in types os-core os-ui; do \
+          for PKG in types os-core os-ui db; do \
             DEST="node_modules/@clintonprime/$PKG"; \
-            SRC="../../$( [ "$PKG" = types ] && echo libs/types || echo packages/$PKG )"; \
+            SRC="../../$( [ "$PKG" = types ] && echo libs/types || ( [ "$PKG" = db ] && echo libs/db || echo packages/$PKG ) )"; \
             rm -rf "$DEST"; \
             mkdir -p "$DEST"; \
             if [ -d "$SRC/dist" ]; then \
