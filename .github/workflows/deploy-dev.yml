@@ -64,7 +64,10 @@ jobs:
             SRC="../../$( [ "$PKG" = types ] && echo libs/types || echo packages/$PKG )"; \
             rm -rf "$DEST"; \
             mkdir -p "$DEST"; \
-            [ -d "$SRC/dist" ] && cp -r "$SRC/dist/." "$DEST/" || true; \
+            if [ -d "$SRC/dist" ]; then \
+              mkdir -p "$DEST/dist"; \
+              cp -r "$SRC/dist/." "$DEST/dist/"; \
+            fi; \
             cp "$SRC/package.json" "$DEST/package.json"; \
             [ -f "$SRC/index.d.ts" ] && cp "$SRC/index.d.ts" "$DEST/index.d.ts" || true; \
           done
