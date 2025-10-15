@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { FsController } from "./fs-controller";
+import { FsController } from "./fs-controller.js";
 import multer from "multer";
 const upload = multer();
 export const fsRoutes = Router();

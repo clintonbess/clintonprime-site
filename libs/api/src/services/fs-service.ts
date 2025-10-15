@@ -8,8 +8,8 @@ import type {
   NeoFileBase,
   NeoFileNode,
 } from "@clintonprime/types";
-import { S3Storage } from "./fs-storage-s3";
-import { getAudioMetadata } from "../utils/audio-metadata";
+import { S3Storage } from "./fs-storage-s3.js";
+import { getAudioMetadata } from "../utils/audio-metadata.js";
 import type { _Object as AwsS3Object } from "@aws-sdk/client-s3";
 import { extname } from "node:path";
 

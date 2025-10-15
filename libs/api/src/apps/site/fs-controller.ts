@@ -4,10 +4,10 @@ import { z } from "zod";
 import { Readable } from "stream";
 import { prisma } from "@clintonprime/db";
 
-import { FsService } from "../../services/fs-service";
-import { S3Storage } from "../../services/fs-storage-s3";
+import { FsService } from "../../services/fs-service.js";
+import { S3Storage } from "../../services/fs-storage-s3.js";
 import type { NeoAudioMeta, NeoFileNode } from "@clintonprime/types";
-import { getAudioMetadata } from "../../utils/audio-metadata";
+import { getAudioMetadata } from "../../utils/audio-metadata.js";
 
 // ───────────────────────────────────────────────────────────────
 // Validation Schemas
