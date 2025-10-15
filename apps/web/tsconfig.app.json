@@ -30,6 +30,12 @@
     "paths": {
       "@clintonprime/types": [
         "../../libs/types/src/index.ts"
+      ],
+      "@clintonprime/os-ui": [
+        "../../packages/os-ui/src/index.tsx"
+      ],
+      "@clintonprime/os-core": [
+        "../../packages/os-core/src/index.ts"
       ]
     }
   },
