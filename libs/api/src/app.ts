@@ -5,7 +5,6 @@ import musicRouter from "./routes/music-router.js";
 import { loadDotenvFromNearest } from "./utils/env-path.js";
 import path from "path";
 import { __dirname } from "./utils/env-path.js";
-import { fsRoutes } from "./apps/site/fs-routes.js";
 import { ZodError } from "zod";
 
 loadDotenvFromNearest();
@@ -32,7 +31,6 @@ app.use(
 
 app.use("/api/spotify", spotifyRouter);
 app.use("/api/music", musicRouter);
-app.use("/api/fs", fsRoutes);
 
 app.get("/", (_req, res) => {
   res.send("clintonprime API online");
