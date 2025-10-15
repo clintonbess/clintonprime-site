@@ -58,16 +58,15 @@ jobs:
           node -e "const fs=require('fs');const p=JSON.parse(fs.readFileSync('package.orig.json','utf8'));['@clintonprime/types','@clintonprime/os-core','@clintonprime/os-ui','@clintonprime/db'].forEach((k)=>{if(p.dependencies&&p.dependencies[k]){p.dependencies[k]=k.includes('/types')?'file:../../libs/types':k.includes('/db')?'file:../../libs/db':k.includes('/os-core')?'file:../../packages/os-core':'file:../../packages/os-ui';}});fs.writeFileSync('package.json',JSON.stringify(p,null,2));"
           rm -rf node_modules package-lock.json
           npm i --omit=dev
-          # If npm created symlinks for workspace packages, replace them with real directories
+          # Ensure workspace packages are materialized with dist/ (no symlinks, no missing dist)
           for PKG in types os-core os-ui; do \
-            if [ -L "node_modules/@clintonprime/$PKG" ]; then \
-              rm -rf "node_modules/@clintonprime/$PKG"; \
-              mkdir -p "node_modules/@clintonprime/$PKG"; \
-              SRC="../../$( [ "$PKG" = types ] && echo libs/types || echo packages/$PKG )"; \
-              cp -r "$SRC/dist/." "node_modules/@clintonprime/$PKG/" 2>/dev/null || true; \
-              cp "$SRC/package.json" "node_modules/@clintonprime/$PKG/package.json"; \
-              [ -f "$SRC/index.d.ts" ] && cp "$SRC/index.d.ts" "node_modules/@clintonprime/$PKG/index.d.ts" || true; \
-            fi; \
+            DEST="node_modules/@clintonprime/$PKG"; \
+            SRC="../../$( [ "$PKG" = types ] && echo libs/types || echo packages/$PKG )"; \
+            rm -rf "$DEST"; \
+            mkdir -p "$DEST"; \
+            [ -d "$SRC/dist" ] && cp -r "$SRC/dist/." "$DEST/" || true; \
+            cp "$SRC/package.json" "$DEST/package.json"; \
+            [ -f "$SRC/index.d.ts" ] && cp "$SRC/index.d.ts" "$DEST/index.d.ts" || true; \
           done
           mv -f package.orig.json package.json
           ls -lah dist
