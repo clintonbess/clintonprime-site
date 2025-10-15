@@ -10,8 +10,16 @@ export * as osKernel from "./os/kernel/index.js";
 export * from "./fs/index.js";
 
 // export * as fs from "./fs/index.js";
-export * from "./os/fs/index.js";
-export * from "./os/app/index.js";
+export * from "./os/fs/index.js"; // runtime helpers under os/fs/index
+export * from "./os/app/index.js"; // runtime helpers under os/app/index
 
-export * from "./os/fs/index";
-export * from "./os/app/index";
+// Re-export core types (types only; erased at runtime)
+export type { FS, Stat } from "./os/fs.js";
+export type {
+  AppManifest,
+  EventBus,
+  UIWindow,
+  UI,
+  AppContext,
+  OSEvent,
+} from "./os/app.js";
