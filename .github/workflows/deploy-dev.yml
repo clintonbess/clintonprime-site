@@ -41,7 +41,7 @@ jobs:
         run: |
           pnpm install
           pnpm -r --filter ./libs/types run clean || true
-          pnpm run build
+          pnpm run build:all
           test -f apps/web/dist/index.html
 
       - name: Package Web Dist
