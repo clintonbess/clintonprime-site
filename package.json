@@ -11,10 +11,10 @@
     "dev:api": "pnpm --filter @clintonprime/api dev",
     "dev:all": "concurrently \"pnpm dev:api\" \"pnpm dev:app\"",
     "//:build": "=== BUILD (default = site only; API opt-in) ===",
-    "build": "pnpm run build:types && pnpm run build:db && pnpm run build:os-core && pnpm run build:os-ui && pnpm run build:os-image && pnpm --filter @clintonprime/web build",
+    "build": "pnpm run build:types && pnpm run db:dev:generate && pnpm run build:db && pnpm run build:os-core && pnpm run build:os-ui && pnpm run build:os-image && pnpm --filter @clintonprime/web build",
     "build:site": "pnpm run build",
     "build:api": "pnpm --filter @clintonprime/api build",
-    "build:all": "pnpm run build:types && pnpm run build:db && pnpm run build:os-core && pnpm run build:os-ui && pnpm run build:os-image && pnpm --filter @clintonprime/web build && pnpm --filter @clintonprime/api build",
+    "build:all": "pnpm run build:types && pnpm run db:dev:generate && pnpm run build:db && pnpm run build:os-core && pnpm run build:os-ui && pnpm run build:os-image && pnpm --filter @clintonprime/web build && pnpm --filter @clintonprime/api build",
     "build:types": "pnpm --filter @clintonprime/types build",
     "build:os-core": "pnpm --filter @clintonprime/os-core build",
     "build:os-ui": "pnpm --filter @clintonprime/os-ui build",
@@ -71,5 +71,8 @@
     "vitest": "^3.2.4",
     "zip-a-folder": "^3.1.9"
   },
-  "packageManager": "pnpm@9.0.0+sha512.b4106707c7225b1748b61595953ccbebff97b54ad05d002aa3635f633b9c53cd666f7ce9b8bc44704f1fa048b9a49b55371ab2d9e9d667d1efe2ef1514bcd513"
+  "packageManager": "pnpm@9.0.0+sha512.b4106707c7225b1748b61595953ccbebff97b54ad05d002aa3635f633b9c53cd666f7ce9b8bc44704f1fa048b9a49b55371ab2d9e9d667d1efe2ef1514bcd513",
+  "dependencies": {
+    "@prisma/client": "^6.17.1"
+  }
 }
