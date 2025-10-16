@@ -18,8 +18,13 @@ fi
 git checkout -q "$SHA"
 
 echo "[deploy] node + pnpm"
-corepack enable || true
-corepack prepare pnpm@9 --activate || true
+# ensure pnpm is available without corepack; install globally if missing
+export PATH="/usr/local/bin:/usr/bin:$PATH"
+if ! command -v pnpm >/dev/null 2>&1; then
+  echo "[deploy] pnpm not found; installing globally..."
+  sudo npm i -g pnpm@9
+  hash -r
+fi
 
 echo "[deploy] install & build (monorepo)"
 pnpm install --frozen-lockfile
@@ -53,7 +58,7 @@ sudo chown -R "$(whoami):$(whoami)" "$CURRENT_API"
 
 if [ -f "$PRESERVE_ENV" ]; then
   sudo install -m 600 -o "$(whoami)" -g "$(whoami)" "$PRESERVE_ENV" "$CURRENT_API/.env"
-elif [ ! -f "$CURRENT_API/.env" ]; then
+elif [ ! -f "$CURRENT_API/.env" ] ; then
   cat > /tmp/.env.new <<'ENVV'
 NODE_ENV=production
 PORT=3000

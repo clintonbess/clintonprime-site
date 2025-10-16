@@ -18,8 +18,8 @@ sudo apt-get install -y nginx git curl rsync build-essential
 echo "[bootstrap] node 20 + pnpm + pm2"
 curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
 sudo apt-get install -y nodejs
-corepack enable || true
-sudo npm i -g pm2
+# install pnpm globally to avoid corepack permission issues
+sudo npm i -g pnpm@9 pm2
 sudo pm2 startup systemd -u "$DEPLOY_USER" --hp "/home/$DEPLOY_USER" --silent || true
 
 echo "[bootstrap] fs layout"
