@@ -28,6 +28,22 @@ if ! command -v pnpm >/dev/null 2>&1; then
   hash -r
 fi
 
+# ---- network hardening + persistent store ----
+log "configure pnpm retries/timeouts"
+pnpm config set registry https://registry.npmjs.org/
+pnpm config set fetch-retries 5
+pnpm config set fetch-retry-factor 10
+pnpm config set fetch-retry-mintimeout 20000
+pnpm config set fetch-retry-maxtimeout 120000
+pnpm config set fetch-timeout 600000
+
+# persistent store to speed up subsequent installs and tolerate hiccups
+if ! pnpm config get store-dir >/dev/null 2>&1; then
+  pnpm config set store-dir /opt/pnpm-store
+fi
+sudo mkdir -p /opt/pnpm-store
+sudo chown -R "$REMOTE_USER:$REMOTE_USER" /opt/pnpm-store
+
 log "prepare repo"
 mkdir -p "$REPO_DIR"
 if [ -d "$REPO_DIR/.git" ]; then
@@ -39,7 +55,7 @@ fi
 cd "$REPO_DIR"
 git config core.fileMode false || true
 git reset --hard HEAD
-# Preserve scripts/env.server (server-local) when cleaning untracked files
+# Preserve server-local env
 git clean -fd -e scripts/env.server
 
 # checkout desired ref
@@ -58,10 +74,29 @@ ok "checked out $(git rev-parse --short HEAD)"
 
 log "install workspace deps"
 if [ -f pnpm-lock.yaml ]; then
+  set +e
   pnpm install --frozen-lockfile
+  STATUS=$?
+  set -e
 else
   warn "pnpm-lock.yaml not found — doing non-frozen install (first run). Consider committing the lockfile."
+  set +e
   pnpm install
+  STATUS=$?
+  set -e
+fi
+
+# fallback: switch to a mirror if npmjs times out
+if [ "${STATUS:-0}" -ne 0 ]; then
+  warn "install failed (likely network). Retrying with npm mirror…"
+  pnpm config set registry https://registry.npmmirror.com/
+  if [ -f pnpm-lock.yaml ]; then
+    pnpm install || true
+  else
+    pnpm install || true
+  fi
+  # switch back to npmjs for subsequent steps
+  pnpm config set registry https://registry.npmjs.org/
 fi
 
 log "generate prisma client for API"
@@ -80,7 +115,7 @@ ok "web deployed"
 log "prepare API runtime"
 pushd libs/api >/dev/null
   pnpm prune --prod || true
-  pnpm install --prod --no-optional
+  pnpm install --prod --no-optional || true
 popd >/dev/null
 
 PRESERVE_ENV="/tmp/.env.keep"
