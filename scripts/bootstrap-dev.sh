@@ -27,6 +27,16 @@ sudo mkdir -p "$WEB_ROOT" "$CURRENT_API" "$REPO_DIR"
 sudo chown -R "$DEPLOY_USER:$DEPLOY_USER" "/opt/clintonprime-site" "$REPO_DIR"
 sudo chown -R www-data:www-data "$WEB_ROOT"
 
+# Prepare repo (create if missing so later steps can run scripts from it)
+if [ ! -d "$REPO_DIR/.git" ]; then
+  echo "[bootstrap] initializing repo dir"
+  git clone "https://github.com/${GITHUB_REPOSITORY:-clintonbess/clintonprime-site}" "$REPO_DIR" || true
+fi
+if [ -d "$REPO_DIR/.git" ]; then
+  echo "[bootstrap] normalizing git config"
+  git -C "$REPO_DIR" config core.fileMode false || true
+fi
+
 echo "[bootstrap] nginx site"
 sudo tee /etc/nginx/sites-available/clintonprime-dev >/dev/null <<'NGX'
 server {

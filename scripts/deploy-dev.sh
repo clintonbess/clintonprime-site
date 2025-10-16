@@ -15,7 +15,12 @@ else
   git clone "$REPO_URL" "$REPO_DIR"
   cd "$REPO_DIR"
 fi
-git checkout -q "$SHA"
+
+# make git ignore file mode changes and force-clean the worktree
+git config core.fileMode false || true
+git reset --hard HEAD
+git clean -fd
+git checkout -f -q "$SHA"
 
 echo "[deploy] node + pnpm"
 # ensure pnpm is available without corepack; install globally if missing
@@ -58,7 +63,7 @@ sudo chown -R "$(whoami):$(whoami)" "$CURRENT_API"
 
 if [ -f "$PRESERVE_ENV" ]; then
   sudo install -m 600 -o "$(whoami)" -g "$(whoami)" "$PRESERVE_ENV" "$CURRENT_API/.env"
-elif [ ! -f "$CURRENT_API/.env" ] ; then
+elif [ ! -f "$CURRENT_API/.env" ]; then
   cat > /tmp/.env.new <<'ENVV'
 NODE_ENV=production
 PORT=3000
