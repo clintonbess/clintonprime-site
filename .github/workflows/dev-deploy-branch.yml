@@ -2,11 +2,11 @@ name: Deploy (Dev) — Server-Side Build (Lightsail)
 
 on:
   push:
-    branches: [dev-deploy] # ← run only from your sandbox branch
+    branches: [dev-deploy]
   workflow_dispatch:
 
 concurrency:
-  group: deploy-dev-build-only
+  group: deploy-dev-lightsail
   cancel-in-progress: true
 
 env:
@@ -23,10 +23,8 @@ jobs:
     runs-on: ubuntu-latest
     environment: dev
     steps:
-      - name: Checkout (shallow)
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 1
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 1 }
 
       - name: Secrets preflight
         run: |
@@ -34,102 +32,7 @@ jobs:
           [ -n "${{ secrets.LIGHTSAIL_USER_DEV }}" ] || (echo "LIGHTSAIL_USER_DEV missing" && exit 1)
           [ -n "${{ secrets.LIGHTSAIL_SSH_KEY_DEV }}" ] || (echo "LIGHTSAIL_SSH_KEY_DEV missing" && exit 1)
 
-      # ──────────────────────────────────────────────────────────────────────────
-      # Bootstrap once: node 20, pnpm, pm2, nginx site, certbot, folders
-      # ──────────────────────────────────────────────────────────────────────────
-      - name: Bootstrap server (idempotent)
-        uses: appleboy/ssh-action@v1.2.0
-        with:
-          host: ${{ secrets.LIGHTSAIL_HOST_DEV }}
-          username: ${{ secrets.LIGHTSAIL_USER_DEV }}
-          key: ${{ secrets.LIGHTSAIL_SSH_KEY_DEV }}
-          script_stop: true
-          script: |
-            set -euo pipefail
-            MARKER="/opt/clintonprime-site/.bootstrapped"
-            if [ ! -f "$MARKER" ]; then
-              sudo apt-get update -y
-              sudo apt-get install -y nginx git curl rsync build-essential
-
-              # Node 20 + pnpm + pm2
-              curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
-              sudo apt-get install -y nodejs
-              corepack enable || true
-              sudo npm i -g pm2
-              sudo pm2 startup systemd -u "${{ env.DEPLOY_USER }}" --hp "/home/${{ env.DEPLOY_USER }}" --silent || true
-
-              # FS layout
-              sudo mkdir -p "${{ env.WEB_ROOT }}" "${{ env.CURRENT_API }}" "${{ env.REPO_DIR }}"
-              sudo chown -R "${{ env.DEPLOY_USER }}:${{ env.DEPLOY_USER }}" "/opt/clintonprime-site" "${{ env.REPO_DIR }}"
-              sudo chown -R www-data:www-data "${{ env.WEB_ROOT }}"
-
-              # Nginx site (clean \ escapes; validated)
-              sudo tee /etc/nginx/sites-available/clintonprime-dev >/dev/null <<'NGX'
-            server {
-              listen 80;
-              listen [::]:80;
-              server_name dev.clintonprime.com;
-
-              # ACME
-              location ^~ /.well-known/acme-challenge/ { root /var/www/html/clintonprime; }
-
-              root /var/www/html/clintonprime;
-              index index.html;
-
-              # SPA
-              location / { try_files $uri $uri/ /index.html; }
-
-              # API proxy
-              location /api/ {
-                proxy_pass http://localhost:3000/api/;
-                proxy_http_version 1.1;
-                proxy_set_header Host $host;
-                proxy_set_header X-Real-IP $remote_addr;
-                proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-                proxy_set_header X-Forwarded-Proto $scheme;
-              }
-
-              # Media proxy
-              location /media/ {
-                proxy_pass http://localhost:3000/media/;
-                proxy_http_version 1.1;
-                proxy_set_header Host $host;
-                proxy_set_header X-Real-IP $remote_addr;
-                proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-                proxy_set_header X-Forwarded-Proto $scheme;
-              }
-
-              add_header X-Frame-Options SAMEORIGIN;
-              add_header X-Content-Type-Options nosniff;
-              add_header Referrer-Policy strict-origin-when-cross-origin;
-              add_header X-XSS-Protection '1; mode=block';
-            }
-            NGX'
-              sudo ln -sf /etc/nginx/sites-available/clintonprime-dev /etc/nginx/sites-enabled/clintonprime-dev
-              sudo nginx -t && sudo systemctl reload nginx
-
-              # Certbot (best-effort)
-              sudo apt-get install -y certbot python3-certbot-nginx || true
-              sudo certbot --nginx -d "${{ env.DOMAIN }}" --non-interactive --agree-tos -m "${{ env.EMAIL }}" --redirect || true
-              sudo nginx -t && sudo systemctl reload nginx || true
-
-              # Placeholder
-              [ -f "${{ env.WEB_ROOT }}/index.html" ] || echo '<!doctype html><meta charset="utf-8"><title>clintonprime dev</title><h1>dev env up ✅</h1>' | sudo tee "${{ env.WEB_ROOT }}/index.html" >/dev/null
-
-              date -Iseconds | sudo tee "$MARKER" >/dev/null
-            else
-              echo "[bootstrap] already done."
-            fi
-
-      # ──────────────────────────────────────────────────────────────────────────
-      # Server-side build flow:
-      #   1) Fetch the exact commit to server (git)
-      #   2) Install with pnpm (workspace)
-      #   3) Build site + libs + API
-      #   4) Deploy web to WEB_ROOT and API to CURRENT_API
-      #   5) PM2 reload
-      # ──────────────────────────────────────────────────────────────────────────
-      - name: Build & Deploy on Lightsail
+      - name: Bootstrap server (runs script from repo)
         uses: appleboy/ssh-action@v1.2.0
         with:
           host: ${{ secrets.LIGHTSAIL_HOST_DEV }}
@@ -140,91 +43,38 @@ jobs:
             set -euo pipefail
             REPO_URL="https://github.com/${{ github.repository }}"
             REPO_DIR="${{ env.REPO_DIR }}"
-            WEB_ROOT="${{ env.WEB_ROOT }}"
-            CURRENT_API="${{ env.CURRENT_API }}"
-            PM2_NAME="${{ env.PM2_NAME }}"
-            SHA="${{ github.sha }}"
-            OWNER="$(whoami)"
-            export NODE_ENV=production
+            [ -d "$REPO_DIR/.git" ] || { sudo mkdir -p "$(dirname "$REPO_DIR")"; git clone "$REPO_URL" "$REPO_DIR"; }
+            cd "$REPO_DIR"
+            git fetch --all --tags
+            git checkout -q "${{ github.sha }}"
+            chmod +x scripts/*.sh || true
+            WEB_ROOT="${{ env.WEB_ROOT }}" \
+            CURRENT_API="${{ env.CURRENT_API }}" \
+            REPO_DIR="${{ env.REPO_DIR }}" \
+            DOMAIN="${{ env.DOMAIN }}" \
+            EMAIL="${{ env.EMAIL }}" \
+            DEPLOY_USER="${{ env.DEPLOY_USER }}" \
+            bash scripts/bootstrap-dev.sh
 
-            # --- Git checkout exact commit
-            mkdir -p "$REPO_DIR"
-            if [ -d "$REPO_DIR/.git" ]; then
-              cd "$REPO_DIR"
-              git fetch --all --tags
-            else
-              git clone "$REPO_URL" "$REPO_DIR"
-              cd "$REPO_DIR"
-            fi
-            git checkout -q "$SHA"
-
-            # --- Node 20 + pnpm path
-            corepack enable || true
-            corepack prepare pnpm@9 --activate || true
-            echo "Using pnpm: $(pnpm -v); Node: $(node -v)"
-
-            # --- Install workspace deps (cached if repeat)
-            pnpm install --frozen-lockfile
-
-            # --- Prisma client generation (monorepo schema)
-            pnpm db:dev:generate
-
-            # --- Build everything needed for dev env (site + api + libs + os-image)
-            pnpm run build:all
-
-            # --- Deploy Web (Vite dist)
-            sudo mkdir -p "$WEB_ROOT"
-            sudo rsync -a --delete "apps/web/dist/" "$WEB_ROOT/"
-            sudo chown -R www-data:www-data "$WEB_ROOT"
-            sudo nginx -t && sudo systemctl reload nginx || true
-
-            # --- Prepare API runtime (slim prod node_modules for API only)
-            pushd libs/api >/dev/null
-              pnpm prune --prod || true
-              pnpm install --prod --no-optional
-              # Ensure prisma client is present (some setups need this in the pkg dir too)
-              pnpm exec prisma generate --schema ../../libs/db/prisma/schema.prisma
-            popd >/dev/null
-
-            # Preserve or create .env for API
-            PRESERVE_ENV="/tmp/.env.keep"
-            [ -f "$CURRENT_API/.env" ] && sudo cp "$CURRENT_API/.env" "$PRESERVE_ENV" || true
-
-            sudo mkdir -p "$CURRENT_API"
-            sudo rsync -a \
-              --delete \
-              --exclude='.env' --exclude='.env.*' \
-              "$REPO_DIR/libs/api/dist/" "$CURRENT_API/dist/"
-            sudo install -m 644 "$REPO_DIR/libs/api/package.json" "$CURRENT_API/package.json"
-            if [ -d "$REPO_DIR/libs/api/public" ]; then
-              sudo rsync -a "$REPO_DIR/libs/api/public/" "$CURRENT_API/public/"
-            fi
-            sudo rsync -a --delete "$REPO_DIR/libs/api/node_modules/" "$CURRENT_API/node_modules/"
-            sudo chown -R "$OWNER:$OWNER" "$CURRENT_API"
-
-            if [ -f "$PRESERVE_ENV" ]; then
-              sudo install -m 600 -o "$OWNER" -g "$OWNER" "$PRESERVE_ENV" "$CURRENT_API/.env"
-            elif [ ! -f "$CURRENT_API/.env" ]; then
-              cat > /tmp/.env.new <<'ENVV'
-            NODE_ENV=production
-            PORT=3000
-            PUBLIC_BASE_URL=https://dev.clintonprime.com
-            # (add app secrets in server .env manually or wire from GH secrets if desired)
-            ENVV'
-              sudo install -m 600 -o "$OWNER" -g "$OWNER" /tmp/.env.new "$CURRENT_API/.env"
-            fi
-
-            # --- Sanity check API starts
-            ( PORT=3000 NODE_ENV=production node "$CURRENT_API/dist/index.js" & echo $! > /tmp/cp-test.pid )
-            sleep 2
-            curl -fsS "http://127.0.0.1:3000/" >/dev/null || (kill "$(cat /tmp/cp-test.pid)" 2>/dev/null || true; exit 1)
-            kill "$(cat /tmp/cp-test.pid)" 2>/dev/null || true
-
-            # --- PM2 reload
-            pm2 delete "$PM2_NAME" >/dev/null 2>&1 || true
-            PORT=3000 NODE_ENV=production pm2 start "$CURRENT_API/dist/index.js" --name "$PM2_NAME" --time --cwd "$CURRENT_API"
-            sleep 3
-            pm2 save || true
-            pm2 describe "$PM2_NAME" || true
-
-            echo "[deploy] done @ $SHA"
+      - name: Build & Deploy (runs script from repo)
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.LIGHTSAIL_HOST_DEV }}
+          username: ${{ secrets.LIGHTSAIL_USER_DEV }}
+          key: ${{ secrets.LIGHTSAIL_SSH_KEY_DEV }}
+          script_stop: true
+          script: |
+            set -euo pipefail
+            REPO_URL="https://github.com/${{ github.repository }}"
+            REPO_DIR="${{ env.REPO_DIR }}"
+            cd "$REPO_DIR" || exit 1
+            git fetch --all --tags
+            git checkout -q "${{ github.sha }}"
+            chmod +x scripts/*.sh || true
+            REPO_URL="$REPO_URL" \
+            REPO_DIR="$REPO_DIR" \
+            WEB_ROOT="${{ env.WEB_ROOT }}" \
+            CURRENT_API="${{ env.CURRENT_API }}" \
+            PM2_NAME="${{ env.PM2_NAME }}" \
+            SHA="${{ github.sha }}" \
+            bash scripts/deploy-dev.sh

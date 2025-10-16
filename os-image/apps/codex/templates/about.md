@@ -19,5 +19,4 @@
     <span class="text-monokai-yellow">Theme:</span> Monokai + Neon-glass aesthetic<br />
     <span class="text-monokai-yellow">Purpose:</span> bridge art, code, and personality — a live portfolio OS.
   </p>
-
-</div>
+s</div>
