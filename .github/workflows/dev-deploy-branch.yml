@@ -9,19 +9,23 @@ concurrency:
   group: deploy-dev-lightsail
   cancel-in-progress: true
 
+# .github/workflows/dev-deploy.yml (snippet)
+
 env:
   WEB_ROOT: /var/www/html/clintonprime
   CURRENT_API: /opt/clintonprime-site/current-api
   PM2_NAME: clintonprime-api-dev
   DOMAIN: dev.clintonprime.com
   EMAIL: clintonbess3@gmail.com
-  DEPLOY_USER: ubuntu
   REPO_DIR: /opt/clintonprime-site/repo
+  # Propagate the SSH username you already store as a secret
+  REMOTE_USER: ${{ secrets.LIGHTSAIL_USER_DEV }}
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
     environment: dev
+
     steps:
       - uses: actions/checkout@v4
         with: { fetch-depth: 1 }
@@ -36,45 +40,60 @@ jobs:
         uses: appleboy/ssh-action@v1.2.0
         with:
           host: ${{ secrets.LIGHTSAIL_HOST_DEV }}
-          username: ${{ secrets.LIGHTSAIL_USER_DEV }}
+          username: ${{ secrets.LIGHTSAIL_USER_DEV }} # ← same user
           key: ${{ secrets.LIGHTSAIL_SSH_KEY_DEV }}
           script_stop: true
           script: |
             set -euo pipefail
             REPO_URL="https://github.com/${{ github.repository }}"
             REPO_DIR="${{ env.REPO_DIR }}"
-            [ -d "$REPO_DIR/.git" ] || { sudo mkdir -p "$(dirname "$REPO_DIR")"; git clone "$REPO_URL" "$REPO_DIR"; }
+            REMOTE_USER="${{ env.REMOTE_USER }}"
+
+            # Ensure parent dir exists and is owned by the intended SSH user
+            sudo mkdir -p "$(dirname "$REPO_DIR")"
+            sudo chown -R "$REMOTE_USER:$REMOTE_USER" "$(dirname "$REPO_DIR")"
+            [ -d "$REPO_DIR" ] || mkdir -p "$REPO_DIR"
+
+            if [ -d "$REPO_DIR/.git" ]; then
+              git -C "$REPO_DIR" fetch --all --tags
+            else
+              git clone "$REPO_URL" "$REPO_DIR"
+            fi
             cd "$REPO_DIR"
-            git fetch --all --tags
+            git config core.fileMode false || true
+            git reset --hard HEAD
+            git clean -fd
             git checkout -q "${{ github.sha }}"
             chmod +x scripts/*.sh || true
+
             WEB_ROOT="${{ env.WEB_ROOT }}" \
             CURRENT_API="${{ env.CURRENT_API }}" \
             REPO_DIR="${{ env.REPO_DIR }}" \
             DOMAIN="${{ env.DOMAIN }}" \
             EMAIL="${{ env.EMAIL }}" \
-            DEPLOY_USER="${{ env.DEPLOY_USER }}" \
+            DEPLOY_USER="${{ env.REMOTE_USER }}" \   # pm2/systemd will run under this user
             bash scripts/bootstrap-dev.sh
 
       - name: Build & Deploy (runs script from repo)
         uses: appleboy/ssh-action@v1.2.0
         with:
           host: ${{ secrets.LIGHTSAIL_HOST_DEV }}
-          username: ${{ secrets.LIGHTSAIL_USER_DEV }}
+          username: ${{ secrets.LIGHTSAIL_USER_DEV }} # ← same user
           key: ${{ secrets.LIGHTSAIL_SSH_KEY_DEV }}
           script_stop: true
           script: |
             set -euo pipefail
-            REPO_URL="https://github.com/${{ github.repository }}"
             REPO_DIR="${{ env.REPO_DIR }}"
-            cd "$REPO_DIR" || exit 1
+            cd "$REPO_DIR"
             git fetch --all --tags
             git checkout -q "${{ github.sha }}"
             chmod +x scripts/*.sh || true
-            REPO_URL="$REPO_URL" \
+
+            REPO_URL="https://github.com/${{ github.repository }}" \
             REPO_DIR="$REPO_DIR" \
             WEB_ROOT="${{ env.WEB_ROOT }}" \
             CURRENT_API="${{ env.CURRENT_API }}" \
             PM2_NAME="${{ env.PM2_NAME }}" \
             SHA="${{ github.sha }}" \
+            REMOTE_USER="${{ env.REMOTE_USER }}" \
             bash scripts/deploy-dev.sh

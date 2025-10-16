@@ -5,6 +5,10 @@ set -euo pipefail
 #   WEB_ROOT, CURRENT_API, REPO_DIR, DOMAIN, EMAIL, DEPLOY_USER
 : "${WEB_ROOT:?}" "${CURRENT_API:?}" "${REPO_DIR:?}" "${DOMAIN:?}" "${EMAIL:?}" "${DEPLOY_USER:?}"
 
+: "${REMOTE_USER:=$(whoami)}"
+# later when chown-ing:
+sudo chown -R "$REMOTE_USER:$REMOTE_USER" "$CURRENT_API"
+
 MARKER="/opt/clintonprime-site/.bootstrapped"
 if [ -f "$MARKER" ]; then
   echo "[bootstrap] already done."
