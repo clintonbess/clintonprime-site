@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
 
 concurrency:
-  group: deploy-dev-lightsail
+  group: deploy-dev-build-only
   cancel-in-progress: true
 
 env:
