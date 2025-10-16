@@ -39,7 +39,8 @@ fi
 cd "$REPO_DIR"
 git config core.fileMode false || true
 git reset --hard HEAD
-git clean -fd
+# Preserve scripts/env.server (server-local) when cleaning untracked files
+git clean -fd -e scripts/env.server
 
 # checkout desired ref
 if [[ "$REF" =~ ^[0-9a-f]{7,40}$ ]]; then
@@ -47,7 +48,7 @@ if [[ "$REF" =~ ^[0-9a-f]{7,40}$ ]]; then
   git checkout -q "$REF"
 else
   log "checkout branch $REF"
-  git checkout -q "${REF#origin/}"
+  git checkout -q "${REF#origin/}" || git checkout -q -B "${REF#origin/}" "$REF"
   git reset --hard "$REF"
 fi
 
@@ -56,7 +57,12 @@ git --no-pager log -1 --oneline
 ok "checked out $(git rev-parse --short HEAD)"
 
 log "install workspace deps"
-pnpm install --frozen-lockfile
+if [ -f pnpm-lock.yaml ]; then
+  pnpm install --frozen-lockfile
+else
+  warn "pnpm-lock.yaml not found — doing non-frozen install (first run). Consider committing the lockfile."
+  pnpm install
+fi
 
 log "generate prisma client for API"
 pnpm --filter @clintonprime/api exec prisma generate --schema=../../libs/db/prisma/schema.prisma
