@@ -9,8 +9,6 @@ concurrency:
   group: deploy-dev-lightsail
   cancel-in-progress: true
 
-# .github/workflows/dev-deploy.yml (snippet)
-
 env:
   WEB_ROOT: /var/www/html/clintonprime
   CURRENT_API: /opt/clintonprime-site/current-api
@@ -18,7 +16,6 @@ env:
   DOMAIN: dev.clintonprime.com
   EMAIL: clintonbess3@gmail.com
   REPO_DIR: /opt/clintonprime-site/repo
-  # Propagate the SSH username you already store as a secret
   REMOTE_USER: ${{ secrets.LIGHTSAIL_USER_DEV }}
 
 jobs:
@@ -28,7 +25,8 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
-        with: { fetch-depth: 1 }
+        with:
+          fetch-depth: 1
 
       - name: Secrets preflight
         run: |
@@ -40,11 +38,11 @@ jobs:
         uses: appleboy/ssh-action@v1.2.0
         with:
           host: ${{ secrets.LIGHTSAIL_HOST_DEV }}
-          username: ${{ secrets.LIGHTSAIL_USER_DEV }} # ← same user
+          username: ${{ secrets.LIGHTSAIL_USER_DEV }}
           key: ${{ secrets.LIGHTSAIL_SSH_KEY_DEV }}
           script_stop: true
           script: |
-            set -euo pipefail
+            set -euxo pipefail
             REPO_URL="https://github.com/${{ github.repository }}"
             REPO_DIR="${{ env.REPO_DIR }}"
             REMOTE_USER="${{ env.REMOTE_USER }}"
@@ -54,6 +52,7 @@ jobs:
             sudo chown -R "$REMOTE_USER:$REMOTE_USER" "$(dirname "$REPO_DIR")"
             [ -d "$REPO_DIR" ] || mkdir -p "$REPO_DIR"
 
+            # Clone or fetch then checkout exact SHA
             if [ -d "$REPO_DIR/.git" ]; then
               git -C "$REPO_DIR" fetch --all --tags
             else
@@ -71,18 +70,18 @@ jobs:
             REPO_DIR="${{ env.REPO_DIR }}" \
             DOMAIN="${{ env.DOMAIN }}" \
             EMAIL="${{ env.EMAIL }}" \
-            DEPLOY_USER="${{ env.REMOTE_USER }}" \   # pm2/systemd will run under this user
+            DEPLOY_USER="${{ env.REMOTE_USER }}" \
             bash scripts/bootstrap-dev.sh
 
       - name: Build & Deploy (runs script from repo)
         uses: appleboy/ssh-action@v1.2.0
         with:
           host: ${{ secrets.LIGHTSAIL_HOST_DEV }}
-          username: ${{ secrets.LIGHTSAIL_USER_DEV }} # ← same user
+          username: ${{ secrets.LIGHTSAIL_USER_DEV }}
           key: ${{ secrets.LIGHTSAIL_SSH_KEY_DEV }}
           script_stop: true
           script: |
-            set -euo pipefail
+            set -euxo pipefail
             REPO_DIR="${{ env.REPO_DIR }}"
             cd "$REPO_DIR"
             git fetch --all --tags
