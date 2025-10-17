@@ -82,20 +82,34 @@ fi
 log "generate prisma client for API"
 pnpm --filter @clintonprime/api exec prisma generate --schema=../../libs/db/prisma/schema.prisma
 
-log "build monorepo (types, db, os-core, os-ui, os-image, web, api)"
+# ------------------- BUILD (ORDERED) -------------------
 log "build monorepo (production, ordered)"
 export NODE_ENV=production
+
+# Clear stale Vite cache so new @source globs in Tailwind are respected
 rm -rf apps/web/node_modules/.vite apps/web/.vite || true
+
+# Build libs → os-core → os-ui → web → api
 pnpm -w --filter @clintonprime/types... run build || true
 pnpm -w --filter @clintonprime/os-core... run build || true
 pnpm -w --filter @clintonprime/os-ui run build
 pnpm -w --filter @clintonprime/web run build
 pnpm -w --filter @clintonprime/api run build
 
+# (Optional) workspace-local install for API runtime after build
 cd libs/api
 pnpm install --prod=false --shamefully-hoist
-
 cd ../../
+
+# ------------------- POST-BUILD ASSERTS -------------------
+log "assert Tailwind output contains window styles"
+if ! grep -q "monokai-border" apps/web/dist/assets/*.css 2>/dev/null; then
+  err "Tailwind CSS missing 'monokai-border' in build output. Check @source paths & build order."
+  exit 1
+fi
+if ! grep -q "window-drag" apps/web/dist/assets/*.css 2>/dev/null; then
+  warn "Could not find 'window-drag' in final CSS. If intentional, ignore; otherwise verify os-ui classes."
+fi
 
 # ------------------- WEB DEPLOY -------------------
 log "deploy web → $WEB_ROOT"
