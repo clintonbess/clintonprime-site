@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { MountableFS, OverlayFS, MemoryFS } from "@clintonprime/os-core";
-import { bootOS } from "@clintonprime/os-ui";
+import { bootOS } from "@clintonprime/os-ui/boot";
 import { loadSystemImageToMemoryFS } from "../boot/fs-from-zip";
 import { motion } from "framer-motion";
 import * as React from "react";
