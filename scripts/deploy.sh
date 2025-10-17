@@ -121,7 +121,7 @@ PRESERVE_ENV="/tmp/.env.keep"
 
 sudo mkdir -p "$CURRENT_API"
 
-# Sync compiled API (keep node_modules built during monorepo build)
+# Sync compiled dist + assets
 sudo rsync -a --delete --exclude='.env' --exclude='.env.*' \
   "$REPO_DIR/libs/api/dist/" "$CURRENT_API/dist/"
 
@@ -131,13 +131,14 @@ fi
 
 sudo install -m 644 "$REPO_DIR/libs/api/package.json" "$CURRENT_API/package.json"
 
-# Instead of pruning/reinstalling, reuse built node_modules for stability
-if [ -d "$REPO_DIR/libs/api/node_modules" ]; then
-  sudo rsync -a --delete "$REPO_DIR/libs/api/node_modules/" "$CURRENT_API/node_modules/"
-else
-  warn "node_modules missing under libs/api — copying workspace root fallback"
-  sudo rsync -a --delete "$REPO_DIR/node_modules/" "$CURRENT_API/node_modules/"
-fi
+# Copy root node_modules as base (hoisted deps)
+sudo rsync -a --delete "$REPO_DIR/node_modules/" "$CURRENT_API/node_modules/"
+
+# Ensure production deps for API are present
+log "installing production dependencies for API"
+pushd "$CURRENT_API" >/dev/null
+  pnpm install --prod --ignore-scripts --prefer-offline || pnpm install --prod
+popd >/dev/null
 
 sudo chown -R "$REMOTE_USER:$REMOTE_USER" "$CURRENT_API"
 
