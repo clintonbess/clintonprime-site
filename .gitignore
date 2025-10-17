@@ -5,3 +5,7 @@ dist/
 *.zip
 knip-result.json
 **/*.code-workspace
+**/*.tsbuildinfo
+*.tsbuildinfo
+tsconfig.build.tsbuildinfo
+tsconfig.tsbuildinfo
