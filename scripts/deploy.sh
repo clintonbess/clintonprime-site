@@ -108,8 +108,8 @@ ok "api env ready @ $ENV_FILE"
 
 # ------------------- SMOKE TEST -------------------
 log "smoke test API (one-shot)"
-( PORT=3000 NODE_ENV=development node "$REPO_DIR/libs/api/dist/index.js" & echo $! > /tmp/cp-test.pid )
-sleep 2
+( PORT=3000 NODE_ENV=development pnpm --filter @clintonprime/api exec node dist/index.js & echo $! > /tmp/cp-test.pid )
+sleep 3
 if curl -fsS "http://127.0.0.1:3000/" >/dev/null; then
   ok "api responded"
 else
@@ -120,7 +120,7 @@ fi
 kill "$(cat /tmp/cp-test.pid)" 2>/dev/null || true
 
 # ------------------- PM2 -------------------
-log "pm2 reload (run API via pnpm exec to preserve workspace resolution)"
+log "pm2 reload (run API via pnpm exec for workspace resolution)"
 pm2 delete "$PM2_NAME" >/dev/null 2>&1 || true
 PORT=3000 NODE_ENV=development \
   pm2 start "pnpm --filter @clintonprime/api exec node dist/index.js" \
