@@ -82,32 +82,34 @@ fi
 log "generate prisma client for API"
 pnpm --filter @clintonprime/api exec prisma generate --schema=../../libs/db/prisma/schema.prisma
 
-# ------------------- BUILD (DIRECT, NO META SCRIPTS) -------------------
-log "build (production, direct tsc/vite; no recursive meta builds)"
+# ------------------- BUILD (PROJECT REFERENCES, NO META SCRIPTS) -------------------
+log "build (production, TypeScript project references via tsc -b)"
 export NODE_ENV=production
 
 # clear stale vite cache to respect new @source globs
 rm -rf apps/web/node_modules/.vite apps/web/.vite || true
 
-# 1) libs/types
-if [ -f libs/types/tsconfig.build.json ]; then
-  pnpm -C libs/types exec tsc -p tsconfig.build.json
-else
-  pnpm -C libs/types exec tsc -p tsconfig.json
-fi
+# Clean old declaration outputs (prevents TS6305 from stale d.ts)
+rm -rf libs/types/dist packages/os-core/dist packages/os-ui/dist libs/api/dist apps/web/tsconfig.tsbuildinfo || true
 
-# 2) packages/os-core
-pnpm -C packages/os-core exec tsc -p tsconfig.json
+# IMPORTANT: Build in dependency order using TS build mode
+# 1) libs/types (produces dist/*.d.ts for downstream)
+pnpm -C libs/types exec tsc -b
 
-# 3) packages/os-ui
-pnpm -C packages/os-ui exec tsc -p tsconfig.json
+# 2) packages/os-core (depends on types)
+pnpm -C packages/os-core exec tsc -b
 
-# 4) apps/web (tsc then vite)
+# 3) packages/os-ui (depends on types + possibly os-core)
+pnpm -C packages/os-ui exec tsc -b
+
+# 4) libs/api (depends on types)
+pnpm -C libs/api exec tsc -b
+
+# 5) apps/web (depends on types, os-ui, etc.)
 pnpm -C apps/web exec tsc -b
-pnpm -C apps/web exec vite build
 
-# 5) libs/api (tsc only; prisma already generated)
-pnpm -C libs/api exec tsc -p tsconfig.json
+# 6) Vite bundle (after TS references are satisfied)
+pnpm -C apps/web exec vite build
 
 # ------------------- POST-BUILD ASSERTS -------------------
 log "assert Tailwind output contains window styles"
