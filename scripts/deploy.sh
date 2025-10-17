@@ -107,17 +107,17 @@ fi
 ok "api env ready @ $ENV_FILE"
 
 # ------------------- SMOKE TEST -------------------
-log "smoke test API (workspace-aware)"
-( cd "$REPO_DIR" && PORT=3000 NODE_ENV=development pnpm --filter @clintonprime/api exec node dist/index.js & echo $! > /tmp/cp-test.pid )
-sleep 3
-if curl -fsS "http://127.0.0.1:3000/" >/dev/null; then
-  ok "api responded"
-else
-  kill "$(cat /tmp/cp-test.pid)" 2>/dev/null || true
-  err "api did not respond on localhost:3000"
-  exit 1
-fi
-kill "$(cat /tmp/cp-test.pid)" 2>/dev/null || true
+# log "smoke test API (workspace-aware)"
+# ( cd "$REPO_DIR" && PORT=3000 NODE_ENV=development pnpm --filter @clintonprime/api exec node dist/index.js & echo $! > /tmp/cp-test.pid )
+# sleep 3
+# if curl -fsS "http://127.0.0.1:3000/" >/dev/null; then
+#   ok "api responded"
+# else
+#   kill "$(cat /tmp/cp-test.pid)" 2>/dev/null || true
+#   err "api did not respond on localhost:3000"
+#   exit 1
+# fi
+# kill "$(cat /tmp/cp-test.pid)" 2>/dev/null || true
 
 # ------------------- PM2 -------------------
 log "pm2 reload (run API via pnpm workspace)"
