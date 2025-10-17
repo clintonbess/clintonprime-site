@@ -4,16 +4,27 @@
     "composite": true,
     "declaration": true,
     "emitDeclarationOnly": false,
+    "noEmit": false,
     "outDir": "dist",
     "rootDir": "src",
     "module": "ESNext",
     "moduleResolution": "Bundler",
     "target": "ES2020",
     "jsx": "react-jsx",
-    "sourceMap": false,
     "skipLibCheck": true,
-    "noEmit": false
+    "sourceMap": false,
+    "disableSourceOfProjectReferenceRedirect": true,
+    "baseUrl": ".",
+    "paths": {}
   },
+  "references": [
+    {
+      "path": "../../libs/types"
+    },
+    {
+      "path": "../os-core"
+    }
+  ],
   "include": [
     "src"
   ]

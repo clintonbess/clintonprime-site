@@ -1,27 +1,10 @@
 {
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
-    "outDir": "dist",
-    "rootDir": "src",
-    "declaration": true,
-    "composite": true, // safe with references
-    "module": "ESNext",
-    "moduleResolution": "Bundler",
-    "target": "ES2022",
-    "lib": [
-      "ES2022",
-      "DOM"
-    ],
-    "skipLibCheck": true,
-    "strict": true,
     "jsx": "react-jsx",
-    "resolveJsonModule": true
+    "strict": true,
+    "skipLibCheck": true
   },
-  "references": [
-    {
-      "path": "../../libs/types"
-    } // <- reference types
-  ],
   "include": [
     "src"
   ]
