@@ -18,7 +18,6 @@
   "dependencies": {
     "@clintonprime/os-core": "workspace:*",
     "@clintonprime/types": "workspace:*",
-    "add": "^2.0.6",
     "highlight.js": "^11.11.1",
     "marked": "^16.4.0",
     "react-icons": "^5.5.0",

@@ -1,6 +1,12 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 
+/* Tell Tailwind to also scan these files for classnames */
+@source "../../../packages/os-ui/src/**/*.{js,ts,jsx,tsx}";
+@source "../../../packages/os-ui/dist/**/*.{js,jsx}";
+@source "../node_modules/@clintonprime/os-ui/dist/**/*.{js,jsx}";
+@source "../../../os-image/**/*.{md,html,js,ts,jsx,tsx}";
+
 @custom-variant dark (&:is(.dark *));
 
 @font-face {
