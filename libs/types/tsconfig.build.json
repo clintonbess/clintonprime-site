@@ -4,7 +4,7 @@
     "outDir": "./dist",
     "declaration": true,
     "declarationMap": false,
-    "emitDeclarationOnly": true,
+    "emitDeclarationOnly": false,
     "composite": true,
     "tsBuildInfoFile": "./tsconfig.build.tsbuildinfo"
   },
