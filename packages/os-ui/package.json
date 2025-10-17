@@ -5,6 +5,7 @@
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
+  "sideEffects": [],
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
@@ -12,8 +13,8 @@
     }
   },
   "scripts": {
-    "build": "rm -rf dist tsconfig.tsbuildinfo && pnpm -w exec tsc -p packages/os-ui/tsconfig.json",
-    "clean": "rm -rf dist"
+    "build": "rimraf dist tsconfig.tsbuildinfo && tsc -p tsconfig.build.json",
+    "clean": "rimraf dist"
   },
   "dependencies": {
     "@clintonprime/os-core": "workspace:*",
@@ -23,14 +24,14 @@
     "react-icons": "^5.5.0",
     "react-rnd": "^10.5.2"
   },
+  "peerDependencies": {
+    "react": "^18 || ^19",
+    "react-dom": "^18 || ^19"
+  },
   "devDependencies": {
     "@types/react": "^19.1.16",
     "@types/react-dom": "^19.1.9",
     "rimraf": "^6.0.1",
     "typescript": "^5.9.2"
-  },
-  "peerDependencies": {
-    "react": "^18 || ^19",
-    "react-dom": "^18 || ^19"
   }
 }

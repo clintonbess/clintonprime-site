@@ -100,12 +100,15 @@ pnpm -C libs/types exec tsc -b
 pnpm -C packages/os-core exec tsc -b
 
 # 3) packages/os-ui (depends on types + possibly os-core)
-pnpm -C packages/os-ui exec tsc -b
+pnpm -C packages/os-ui exec tsc -p tsconfig.build.json
+
+# assert os-ui entry exists
+test -f packages/os-ui/dist/index.js || { err "os-ui missing dist/index.js"; exit 1; }
 
 # 4) libs/api (depends on types)
 pnpm -C libs/api exec tsc -b
 
-# 5) apps/web (depends on types, os-ui, etc.)
+# 5) apps/web (depends on types, os-ui,eetc.)
 pnpm -C apps/web exec tsc -b
 
 # 6) Vite bundle (after TS references are satisfied)

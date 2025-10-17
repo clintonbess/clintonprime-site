@@ -1,3 +1,6 @@
+export * from "./ui/prime-window";
+export * from "./ui/prime-tabs-window";
+
 import React from "react";
 import { createRoot } from "react-dom/client";
 import type { FS } from "@clintonprime/types";
