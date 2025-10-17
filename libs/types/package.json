@@ -16,7 +16,7 @@
     }
   },
   "scripts": {
-    "build": "rimraf dist tsconfig.build.tsbuildinfo && tsc -p tsconfig.build.json",
+    "build": "rm -rf dist tsconfig.build.tsbuildinfo && pnpm -w exec tsc -p tsconfig.build.json",
     "clean": "rimraf dist",
     "rebuild": "pnpm clean && pnpm build"
   },
