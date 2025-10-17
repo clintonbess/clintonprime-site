@@ -85,6 +85,9 @@ pnpm --filter @clintonprime/api exec prisma generate --schema=../../libs/db/pris
 log "build monorepo (types, db, os-core, os-ui, os-image, web, api)"
 pnpm run build:all
 
+cd libs/api
+pnpm install --prod=false --shamefully-hoist
+
 # ------------------- WEB DEPLOY -------------------
 log "deploy web → $WEB_ROOT"
 sudo mkdir -p "$WEB_ROOT"
