@@ -97,9 +97,9 @@ pnpm -w --filter @clintonprime/web run build
 pnpm -w --filter @clintonprime/api run build
 
 # (Optional) workspace-local install for API runtime after build
-cd libs/api
-pnpm install --prod=false --shamefully-hoist
-cd ../../
+# cd libs/api
+# pnpm install --prod=false --shamefully-hoist
+# cd ../../
 
 # ------------------- POST-BUILD ASSERTS -------------------
 log "assert Tailwind output contains window styles"
