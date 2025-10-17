@@ -120,9 +120,10 @@ fi
 kill "$(cat /tmp/cp-test.pid)" 2>/dev/null || true
 
 # ------------------- PM2 -------------------
-log "pm2 reload (running API directly from repo)"
+log "pm2 reload (run API via pnpm exec to preserve workspace resolution)"
 pm2 delete "$PM2_NAME" >/dev/null 2>&1 || true
-PORT=3000 NODE_ENV=development pm2 start "$REPO_DIR/libs/api/dist/index.js" \
+PORT=3000 NODE_ENV=development \
+  pm2 start "pnpm --filter @clintonprime/api exec node dist/index.js" \
   --name "$PM2_NAME" --time --cwd "$REPO_DIR"
 sleep 2
 pm2 save || true
