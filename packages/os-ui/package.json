@@ -12,8 +12,8 @@
     }
   },
   "scripts": {
-    "build": "rimraf dist tsconfig.tsbuildinfo && tsc -p tsconfig.json",
-    "clean": "rimraf dist"
+    "build": "rm -rf dist tsconfig.tsbuildinfo && pnpm -w exec tsc -p packages/os-ui/tsconfig.json",
+    "clean": "rm -rf dist"
   },
   "dependencies": {
     "@clintonprime/os-core": "workspace:*",
