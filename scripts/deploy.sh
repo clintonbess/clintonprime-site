@@ -93,7 +93,7 @@ sudo chown -R www-data:www-data "$WEB_ROOT"
 sudo nginx -t && sudo systemctl reload nginx || true
 ok "web deployed"
 
-# ------------------- API (run from repo) -------------------
+# ------------------- API ENV -------------------
 log "prepare API env"
 ENV_FILE="$REPO_DIR/libs/api/.env"
 if [ ! -f "$ENV_FILE" ]; then
@@ -107,24 +107,24 @@ fi
 ok "api env ready @ $ENV_FILE"
 
 # ------------------- SMOKE TEST -------------------
-# log "smoke test API (one-shot)"
-# ( PORT=3000 NODE_ENV=development pnpm --filter @clintonprime/api exec node dist/index.js & echo $! > /tmp/cp-test.pid )
-# sleep 3
-# if curl -fsS "http://127.0.0.1:3000/" >/dev/null; then
-#   ok "api responded"
-# else
-#   kill "$(cat /tmp/cp-test.pid)" 2>/dev/null || true
-#   err "api did not respond on localhost:3000"
-#   exit 1
-# fi
-# kill "$(cat /tmp/cp-test.pid)" 2>/dev/null || true
+log "smoke test API (workspace-aware)"
+( cd "$REPO_DIR" && PORT=3000 NODE_ENV=development pnpm --filter @clintonprime/api exec node dist/index.js & echo $! > /tmp/cp-test.pid )
+sleep 3
+if curl -fsS "http://127.0.0.1:3000/" >/dev/null; then
+  ok "api responded"
+else
+  kill "$(cat /tmp/cp-test.pid)" 2>/dev/null || true
+  err "api did not respond on localhost:3000"
+  exit 1
+fi
+kill "$(cat /tmp/cp-test.pid)" 2>/dev/null || true
 
 # ------------------- PM2 -------------------
-log "pm2 reload (run API via pnpm exec for workspace resolution)"
+log "pm2 reload (run API via pnpm workspace)"
 pm2 delete "$PM2_NAME" >/dev/null 2>&1 || true
+cd "$REPO_DIR"
 PORT=3000 NODE_ENV=development \
-  pm2 start "pnpm --filter @clintonprime/api exec node dist/index.js" \
-  --name "$PM2_NAME" --time --cwd "$REPO_DIR"
+  pm2 start pnpm --name "$PM2_NAME" --time -- run --filter @clintonprime/api start
 sleep 2
 pm2 save || true
 pm2 describe "$PM2_NAME" || true
