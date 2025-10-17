@@ -83,7 +83,14 @@ log "generate prisma client for API"
 pnpm --filter @clintonprime/api exec prisma generate --schema=../../libs/db/prisma/schema.prisma
 
 log "build monorepo (types, db, os-core, os-ui, os-image, web, api)"
-pnpm run build:all
+log "build monorepo (production, ordered)"
+export NODE_ENV=production
+rm -rf apps/web/node_modules/.vite apps/web/.vite || true
+pnpm -w --filter @clintonprime/types... run build || true
+pnpm -w --filter @clintonprime/os-core... run build || true
+pnpm -w --filter @clintonprime/os-ui run build
+pnpm -w --filter @clintonprime/web run build
+pnpm -w --filter @clintonprime/api run build
 
 cd libs/api
 pnpm install --prod=false --shamefully-hoist
