@@ -88,6 +88,8 @@ pnpm run build:all
 cd libs/api
 pnpm install --prod=false --shamefully-hoist
 
+cd ../../
+
 # ------------------- WEB DEPLOY -------------------
 log "deploy web → $WEB_ROOT"
 sudo mkdir -p "$WEB_ROOT"
