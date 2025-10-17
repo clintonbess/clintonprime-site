@@ -16,8 +16,14 @@
     "disableSourceOfProjectReferenceRedirect": true,
     "baseUrl": ".",
     "paths": {
-      "@clintonprime/types": ["../../libs/types/src/index.ts", "../../libs/types"],
-      "@clintonprime/os-core": ["../os-core/src/index.ts", "../os-core"]
+      "@clintonprime/types": [
+        "../../libs/types/src/index.ts",
+        "../../libs/types"
+      ],
+      "@clintonprime/os-core": [
+        "../os-core/src/index.ts",
+        "../os-core"
+      ]
     }
   },
   "references": [

@@ -89,8 +89,17 @@ export NODE_ENV=production
 # clear stale vite cache to respect new @source globs
 rm -rf apps/web/node_modules/.vite apps/web/.vite || true
 
-# Clean old declaration outputs (prevents TS6305 from stale d.ts)
-rm -rf libs/types/dist packages/os-core/dist packages/os-ui/dist libs/api/dist apps/web/tsconfig.tsbuildinfo || true
+# Clean old declaration outputs and tsbuildinfo (prevents TS6305 from stale d.ts)
+rm -rf \
+  libs/types/dist \
+  libs/types/tsconfig.build.tsbuildinfo \
+  packages/os-core/dist \
+  packages/os-core/tsconfig.build.tsbuildinfo \
+  packages/os-ui/dist \
+  packages/os-ui/tsconfig.build.tsbuildinfo \
+  libs/api/dist \
+  libs/api/tsconfig.tsbuildinfo \
+  apps/web/tsconfig.tsbuildinfo || true
 
 # 1) libs/types
 pnpm -C libs/types exec tsc -b tsconfig.build.json
