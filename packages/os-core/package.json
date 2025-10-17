@@ -11,12 +11,17 @@
       "default": "./dist/index.js"
     }
   },
+  "sideEffects": [],
   "scripts": {
-    "build": "tsc -p tsconfig.json",
+    "build": "rimraf dist tsconfig.build.tsbuildinfo && tsc -b tsconfig.build.json",
     "clean": "rimraf dist"
   },
+  "dependencies": {
+    "@clintonprime/types": "workspace:*"
+  },
+  "peerDependencies": {},
   "devDependencies": {
     "rimraf": "^6.0.1",
-    "typescript": "^5.9.2"
+    "typescript": "^5.9.3"
   }
 }

@@ -92,23 +92,22 @@ rm -rf apps/web/node_modules/.vite apps/web/.vite || true
 # Clean old declaration outputs (prevents TS6305 from stale d.ts)
 rm -rf libs/types/dist packages/os-core/dist packages/os-ui/dist libs/api/dist apps/web/tsconfig.tsbuildinfo || true
 
-# 1) libs/types (emit dist/*.d.ts and ESM stubs)
+# 1) libs/types
 pnpm -C libs/types exec tsc -b tsconfig.build.json
 
-# 2) packages/os-core (if it references types)
-pnpm -C packages/os-core exec tsc -b tsconfig.json
+# 2) packages/os-core  👈 build after types, before os-ui
+pnpm -C packages/os-core exec tsc -b tsconfig.build.json
 
-# 3) packages/os-ui (force consuming referenced outputs; emits dist/)
+# 3) packages/os-ui
 pnpm -C packages/os-ui exec tsc -p tsconfig.build.json
-
-# assert os-ui entry exists
 test -f packages/os-ui/dist/index.js || { err "os-ui missing dist/index.js"; exit 1; }
 
 # 4) libs/api
 pnpm -C libs/api exec tsc -b tsconfig.json
 
-# 5) apps/web (ts first)
+# 5) apps/web (ts) → Vite
 pnpm -C apps/web exec tsc -b tsconfig.json
+pnpm -C apps/web exec vite build
 
 # 6) Vite bundle (after TS references are satisfied)
 pnpm -C apps/web exec vite build
