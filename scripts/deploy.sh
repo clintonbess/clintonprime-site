@@ -10,7 +10,7 @@ if [ -f "$SCRIPT_DIR/env.server" ]; then
   . "$SCRIPT_DIR/env.server"
 fi
 
-require_env REMOTE_USER WEB_ROOT SITE_ROOT REPO_DIR CURRENT_API PM2_NAME REPO_URL
+require_env REMOTE_USER WEB_ROOT SITE_ROOT REPO_DIR PM2_NAME REPO_URL
 
 # choose ref: SHA > BRANCH > origin/dev
 REF="${SHA:-}"
@@ -43,6 +43,7 @@ fi
 sudo mkdir -p /opt/pnpm-store
 sudo chown -R "$REMOTE_USER:$REMOTE_USER" /opt/pnpm-store
 
+# ------------------- REPO -------------------
 log "prepare repo"
 mkdir -p "$REPO_DIR"
 if [ -d "$REPO_DIR/.git" ]; then
@@ -92,45 +93,22 @@ sudo chown -R www-data:www-data "$WEB_ROOT"
 sudo nginx -t && sudo systemctl reload nginx || true
 ok "web deployed"
 
-# ------------------- API DEPLOY -------------------
-log "prepare API runtime"
-
-PRESERVE_ENV="/tmp/.env.keep"
-[ -f "$CURRENT_API/.env" ] && sudo cp "$CURRENT_API/.env" "$PRESERVE_ENV" || true
-
-sudo mkdir -p "$CURRENT_API"
-
-sudo rsync -a --delete --exclude='.env' --exclude='.env.*' \
-  "$REPO_DIR/libs/api/dist/" "$CURRENT_API/dist/"
-
-if [ -d "$REPO_DIR/libs/api/public" ]; then
-  sudo rsync -a "$REPO_DIR/libs/api/public/" "$CURRENT_API/public/"
-fi
-
-sudo install -m 644 "$REPO_DIR/libs/api/package.json" "$CURRENT_API/package.json"
-
-# Copy full node_modules (dev mode, includes all workspace deps)
-sudo rsync -a --delete "$REPO_DIR/node_modules/" "$CURRENT_API/node_modules/"
-
-sudo chown -R "$REMOTE_USER:$REMOTE_USER" "$CURRENT_API"
-
-# Restore or create .env
-if [ -f "$PRESERVE_ENV" ]; then
-  sudo install -m 600 -o "$REMOTE_USER" -g "$REMOTE_USER" "$PRESERVE_ENV" "$CURRENT_API/.env"
-elif [ ! -f "$CURRENT_API/.env" ]; then
-  warn "creating basic .env (add secrets manually)"
-  cat > /tmp/.env.new <<'ENVV'
+# ------------------- API (run from repo) -------------------
+log "prepare API env"
+ENV_FILE="$REPO_DIR/libs/api/.env"
+if [ ! -f "$ENV_FILE" ]; then
+  warn "creating default .env in libs/api"
+  cat > "$ENV_FILE" <<'ENVV'
 NODE_ENV=development
 PORT=3000
 PUBLIC_BASE_URL=https://dev.clintonprime.com
 ENVV
-  sudo install -m 600 -o "$REMOTE_USER" -g "$REMOTE_USER" /tmp/.env.new "$CURRENT_API/.env"
 fi
-ok "api runtime staged"
+ok "api env ready @ $ENV_FILE"
 
 # ------------------- SMOKE TEST -------------------
 log "smoke test API (one-shot)"
-( PORT=3000 NODE_ENV=development node "$CURRENT_API/dist/index.js" & echo $! > /tmp/cp-test.pid )
+( PORT=3000 NODE_ENV=development node "$REPO_DIR/libs/api/dist/index.js" & echo $! > /tmp/cp-test.pid )
 sleep 2
 if curl -fsS "http://127.0.0.1:3000/" >/dev/null; then
   ok "api responded"
@@ -141,10 +119,11 @@ else
 fi
 kill "$(cat /tmp/cp-test.pid)" 2>/dev/null || true
 
-# ------------------- PM2 RELOAD -------------------
-log "pm2 reload"
+# ------------------- PM2 -------------------
+log "pm2 reload (running API directly from repo)"
 pm2 delete "$PM2_NAME" >/dev/null 2>&1 || true
-PORT=3000 NODE_ENV=development pm2 start "$CURRENT_API/dist/index.js" --name "$PM2_NAME" --time --cwd "$CURRENT_API"
+PORT=3000 NODE_ENV=development pm2 start "$REPO_DIR/libs/api/dist/index.js" \
+  --name "$PM2_NAME" --time --cwd "$REPO_DIR"
 sleep 2
 pm2 save || true
 pm2 describe "$PM2_NAME" || true
