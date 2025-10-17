@@ -105,6 +105,7 @@ pnpm --filter @clintonprime/api exec prisma generate --schema=../../libs/db/pris
 log "build monorepo (types, db, os-core, os-ui, os-image, web, api)"
 pnpm run build:all
 
+# ------------------ DEPLOY WEB ------------------
 log "deploy web → $WEB_ROOT"
 sudo mkdir -p "$WEB_ROOT"
 sudo rsync -a --delete "apps/web/dist/" "$WEB_ROOT/"
@@ -112,25 +113,35 @@ sudo chown -R www-data:www-data "$WEB_ROOT"
 sudo nginx -t && sudo systemctl reload nginx || true
 ok "web deployed"
 
+# ------------------ DEPLOY API ------------------
 log "prepare API runtime"
-pushd libs/api >/dev/null
-  pnpm prune --prod || true
-  pnpm install --prod --no-optional || true
-popd >/dev/null
 
 PRESERVE_ENV="/tmp/.env.keep"
 [ -f "$CURRENT_API/.env" ] && sudo cp "$CURRENT_API/.env" "$PRESERVE_ENV" || true
 
 sudo mkdir -p "$CURRENT_API"
+
+# Sync compiled API (keep node_modules built during monorepo build)
 sudo rsync -a --delete --exclude='.env' --exclude='.env.*' \
   "$REPO_DIR/libs/api/dist/" "$CURRENT_API/dist/"
+
 if [ -d "$REPO_DIR/libs/api/public" ]; then
   sudo rsync -a "$REPO_DIR/libs/api/public/" "$CURRENT_API/public/"
 fi
+
 sudo install -m 644 "$REPO_DIR/libs/api/package.json" "$CURRENT_API/package.json"
-sudo rsync -a --delete "$REPO_DIR/libs/api/node_modules/" "$CURRENT_API/node_modules/"
+
+# Instead of pruning/reinstalling, reuse built node_modules for stability
+if [ -d "$REPO_DIR/libs/api/node_modules" ]; then
+  sudo rsync -a --delete "$REPO_DIR/libs/api/node_modules/" "$CURRENT_API/node_modules/"
+else
+  warn "node_modules missing under libs/api — copying workspace root fallback"
+  sudo rsync -a --delete "$REPO_DIR/node_modules/" "$CURRENT_API/node_modules/"
+fi
+
 sudo chown -R "$REMOTE_USER:$REMOTE_USER" "$CURRENT_API"
 
+# Restore .env or create if missing
 if [ -f "$PRESERVE_ENV" ]; then
   sudo install -m 600 -o "$REMOTE_USER" -g "$REMOTE_USER" "$PRESERVE_ENV" "$CURRENT_API/.env"
 elif [ ! -f "$CURRENT_API/.env" ]; then
@@ -150,6 +161,7 @@ ENVV
 fi
 ok "api runtime staged"
 
+# ------------------ SMOKE TEST ------------------
 log "smoke test API (one-shot)"
 ( PORT=3000 NODE_ENV=production node "$CURRENT_API/dist/index.js" & echo $! > /tmp/cp-test.pid )
 sleep 2
@@ -162,6 +174,7 @@ else
 fi
 kill "$(cat /tmp/cp-test.pid)" 2>/dev/null || true
 
+# ------------------ PM2 RELOAD ------------------
 log "pm2 reload"
 pm2 delete "$PM2_NAME" >/dev/null 2>&1 || true
 PORT=3000 NODE_ENV=production pm2 start "$CURRENT_API/dist/index.js" --name "$PM2_NAME" --time --cwd "$CURRENT_API"
