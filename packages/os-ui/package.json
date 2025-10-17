@@ -5,11 +5,17 @@
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
-  "sideEffects": [],
+  "sideEffects": [
+    "./dist/boot.js"
+  ],
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
+    },
+    "./boot": {
+      "types": "./dist/boot.d.ts",
+      "default": "./dist/boot.js"
     }
   },
   "scripts": {
