@@ -82,24 +82,32 @@ fi
 log "generate prisma client for API"
 pnpm --filter @clintonprime/api exec prisma generate --schema=../../libs/db/prisma/schema.prisma
 
-# ------------------- BUILD (ORDERED) -------------------
-log "build monorepo (production, ordered)"
+# ------------------- BUILD (DIRECT, NO META SCRIPTS) -------------------
+log "build (production, direct tsc/vite; no recursive meta builds)"
 export NODE_ENV=production
 
-# Clear stale Vite cache so new @source globs in Tailwind are respected
+# clear stale vite cache to respect new @source globs
 rm -rf apps/web/node_modules/.vite apps/web/.vite || true
 
-# Build libs → os-core → os-ui → web → api
-pnpm -w --filter @clintonprime/types... run build || true
-pnpm -w --filter @clintonprime/os-core... run build || true
-pnpm -w --filter @clintonprime/os-ui run build
-pnpm -w --filter @clintonprime/web run build
-pnpm -w --filter @clintonprime/api run build
+# 1) libs/types
+if [ -f libs/types/tsconfig.build.json ]; then
+  pnpm -C libs/types exec tsc -p tsconfig.build.json
+else
+  pnpm -C libs/types exec tsc -p tsconfig.json
+fi
 
-# (Optional) workspace-local install for API runtime after build
-# cd libs/api
-# pnpm install --prod=false --shamefully-hoist
-# cd ../../
+# 2) packages/os-core
+pnpm -C packages/os-core exec tsc -p tsconfig.json
+
+# 3) packages/os-ui
+pnpm -C packages/os-ui exec tsc -p tsconfig.json
+
+# 4) apps/web (tsc then vite)
+pnpm -C apps/web exec tsc -b
+pnpm -C apps/web exec vite build
+
+# 5) libs/api (tsc only; prisma already generated)
+pnpm -C libs/api exec tsc -p tsconfig.json
 
 # ------------------- POST-BUILD ASSERTS -------------------
 log "assert Tailwind output contains window styles"
