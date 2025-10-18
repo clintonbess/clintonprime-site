@@ -1,23 +1,28 @@
-name: Deploy (Dev) — Server-Side Build (Lightsail)
+name: Deploy (Dev) — Server-Side Build (EC2 via SSM)
 
 on:
   push:
-    branches: [dev-deploy]
+    branches: ["dev-deploy"]
   workflow_dispatch:
 
+permissions:
+  id-token: write # OIDC
+  contents: read
+
 concurrency:
-  group: deploy-dev-lightsail
+  group: deploy-dev-ec2
   cancel-in-progress: true
 
+# Runner-side env that we write into scripts/env.server on the EC2 box.
 env:
   WEB_ROOT: /var/www/html/clintonprime
-  CURRENT_API: /opt/clintonprime-site/current-api
   SITE_ROOT: /opt/clintonprime-site
+  REPO_DIR: /opt/clintonprime-site/repo
+  CURRENT_API: /opt/clintonprime-site/current-api
   PM2_NAME: clintonprime-api-dev
   DOMAIN: dev.clintonprime.com
   EMAIL: clintonbess3@gmail.com
-  REPO_DIR: /opt/clintonprime-site/repo
-  REMOTE_USER: ${{ secrets.LIGHTSAIL_USER_DEV }}
+  DEPLOY_USER: ubuntu
 
 jobs:
   deploy:
@@ -25,92 +30,161 @@ jobs:
     environment: dev
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Configure AWS (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
         with:
-          fetch-depth: 1
+          role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
+          aws-region: ${{ secrets.AWS_REGION }}
 
-      - name: Secrets preflight
+      - name: Who am I?
+        run: aws sts get-caller-identity
+
+      # If your OIDC role includes ec2:DescribeInstances, keep this.
+      # Otherwise you can skip this and use SSM tag-targeting directly (see notes below).
+      - name: Find EC2 instance by tag (Name=clintonprime-dev)
+        id: ec2
         run: |
-          [ -n "${{ secrets.LIGHTSAIL_HOST_DEV }}" ] || (echo "LIGHTSAIL_HOST_DEV missing" && exit 1)
-          [ -n "${{ secrets.LIGHTSAIL_USER_DEV }}" ] || (echo "LIGHTSAIL_USER_DEV missing" && exit 1)
-          [ -n "${{ secrets.LIGHTSAIL_SSH_KEY_DEV }}" ] || (echo "LIGHTSAIL_SSH_KEY_DEV missing" && exit 1)
+          IID=$(aws ec2 describe-instances \
+            --filters "Name=tag:Name,Values=clintonprime-dev" "Name=instance-state-name,Values=running" \
+            --query "Reservations[].Instances[].InstanceId" --output text)
+          [ -n "$IID" ] || { echo "No instance found"; exit 1; }
+          echo "id=$IID" >> "$GITHUB_OUTPUT"
+          echo "InstanceId: $IID"
 
-      - name: Bootstrap server (runs script from repo)
-        uses: appleboy/ssh-action@v1.2.0
-        with:
-          host: ${{ secrets.LIGHTSAIL_HOST_DEV }}
-          username: ${{ secrets.LIGHTSAIL_USER_DEV }}
-          key: ${{ secrets.LIGHTSAIL_SSH_KEY_DEV }}
-          script_stop: true
-          script: |
-            set -euxo pipefail
-            REPO_URL="https://github.com/${{ github.repository }}"
-            REPO_DIR="${{ env.REPO_DIR }}"
-            REMOTE_USER="${{ env.REMOTE_USER }}"
+      - name: Send deploy via SSM (base64 remote script; run as ubuntu)
+        id: ssm
+        run: |
+          set -euo pipefail
 
-            # Ensure parent dir exists and is owned by the intended SSH user
-            sudo mkdir -p "$(dirname "$REPO_DIR")"
-            sudo chown -R "$REMOTE_USER:$REMOTE_USER" "$(dirname "$REPO_DIR")"
-            [ -d "$REPO_DIR" ] || mkdir -p "$REPO_DIR"
+          # Build the remote script with variables expanded here on the runner.
+          REMOTE_SCRIPT=$(cat <<'EOS'
+          set -euo pipefail
 
-            # Clone or fetch then checkout exact SHA
-            if [ -d "$REPO_DIR/.git" ]; then
-              git -C "$REPO_DIR" fetch --all --tags
-            else
-              git clone "$REPO_URL" "$REPO_DIR"
-            fi
-            cd "$REPO_DIR"
-            git config core.fileMode false || true
-            git reset --hard HEAD
-            git clean -fd
-            git checkout -q "${{ github.sha }}"
+          export DEPLOY_USER="${DEPLOY_USER}"
+          export WEB_ROOT="${WEB_ROOT}"
+          export SITE_ROOT="${SITE_ROOT}"
+          export REPO_DIR="${REPO_DIR}"
+          export CURRENT_API="${CURRENT_API}"
+          export PM2_NAME="${PM2_NAME}"
+          export DOMAIN="${DOMAIN}"
+          export EMAIL="${EMAIL}"
+          export GIT_REPO_URL="git@github.com:clintonbess/clintonprime-site.git"
+          export GITHUB_SHA="${GITHUB_SHA}"
+          export GITHUB_REF_NAME="${GITHUB_REF_NAME}"
+
+          # Prepare directories and ownership
+          sudo mkdir -p "${SITE_ROOT}"
+          sudo mkdir -p "${REPO_DIR}"
+          sudo chown -R "${DEPLOY_USER}:${DEPLOY_USER}" "${SITE_ROOT}"
+
+          # Mark repo as safe for both root (SSM) and ubuntu (actual deploy user)
+          sudo git config --system --add safe.directory "${REPO_DIR}" || true
+          sudo -u "${DEPLOY_USER}" git config --global --add safe.directory "${REPO_DIR}" || true
+
+          # Clone or fetch repo, then checkout exact SHA
+          if [ -d "${REPO_DIR}/.git" ]; then
+            sudo -u "${DEPLOY_USER}" bash -lc "git -C '${REPO_DIR}' fetch --all --tags"
+          else
+            sudo -u "${DEPLOY_USER}" bash -lc "git clone '${GIT_REPO_URL}' '${REPO_DIR}'"
+          fi
+
+          sudo -u "${DEPLOY_USER}" bash -lc "
+            cd '${REPO_DIR}' && \
+            git config core.fileMode false || true && \
+            git reset --hard HEAD && \
+            git clean -fd && \
+            git checkout -q '${GITHUB_SHA}' && \
             chmod +x scripts/*.sh || true
+          "
 
-            WEB_ROOT="${{ env.WEB_ROOT }}" \
-            CURRENT_API="${{ env.CURRENT_API }}" \
-            REPO_DIR="${{ env.REPO_DIR }}" \
-            DOMAIN="${{ env.DOMAIN }}" \
-            EMAIL="${{ env.EMAIL }}" \
-            DEPLOY_USER="${{ env.REMOTE_USER }}" \
-            bash scripts/bootstrap-dev.sh
+          # Render scripts/env.server
+          sudo tee "${REPO_DIR}/scripts/env.server" >/dev/null <<ENVV
+          REMOTE_USER=${DEPLOY_USER}
+          WEB_ROOT=${WEB_ROOT}
+          SITE_ROOT=${SITE_ROOT}
+          REPO_DIR=${REPO_DIR}
+          CURRENT_API=${CURRENT_API}
+          PM2_NAME=${PM2_NAME}
+          REPO_URL=${GIT_REPO_URL}
+          BRANCH=
+          SHA=${GITHUB_SHA}
 
-      - name: Build & Deploy (runs script from repo)
-        uses: appleboy/ssh-action@v1.2.0
-        with:
-          host: ${{ secrets.LIGHTSAIL_HOST_DEV }}
-          username: ${{ secrets.LIGHTSAIL_USER_DEV }}
-          key: ${{ secrets.LIGHTSAIL_SSH_KEY_DEV }}
-          script_stop: true
-          script: |
-            set -euxo pipefail
-            REPO_DIR="${{ env.REPO_DIR }}"
-            cd "$REPO_DIR"
-            git fetch --all --tags
-            git checkout -q "${{ github.sha }}"
-            chmod +x scripts/*.sh || true
+          # API runtime env (fill from GH secrets at send time below)
+          API_PORT=${API_PORT}
+          SPOTIFY_CLIENT_ID=${SPOTIFY_CLIENT_ID}
+          SPOTIFY_CLIENT_SECRET=${SPOTIFY_CLIENT_SECRET}
+          SPOTIFY_REDIRECT_URI=${SPOTIFY_REDIRECT_URI}
+          SPOTIFY_REFRESH_TOKEN=${SPOTIFY_REFRESH_TOKEN}
+          SPOTIFY_ACCESS_TOKEN=${SPOTIFY_ACCESS_TOKEN}
+          ENVV
+          sudo chown "${DEPLOY_USER}:${DEPLOY_USER}" "${REPO_DIR}/scripts/env.server"
+          sudo chmod 600 "${REPO_DIR}/scripts/env.server" || true
 
-            # Render env.server with secrets and deployment settings
-            cat > scripts/env.server <<'ENVV'
-            export REMOTE_USER="${{ env.REMOTE_USER }}"
-            export WEB_ROOT="${{ env.WEB_ROOT }}"
-            export SITE_ROOT="${{ env.SITE_ROOT }}"
-            export REPO_DIR="${{ env.REPO_DIR }}"
-            export CURRENT_API="${{ env.CURRENT_API }}"
-            export PM2_NAME="${{ env.PM2_NAME }}"
-            export REPO_URL="https://github.com/${{ github.repository }}"
-            export BRANCH=""            # using exact SHA for this workflow
-            export SHA="${{ github.sha }}"
+          echo "[CI] kicking deploy for ${GITHUB_SHA} on branch ${GITHUB_REF_NAME}"
 
-            # API runtime env
-            export API_PORT="${{ secrets.API_PORT || '3000' }}"
-            export SPOTIFY_CLIENT_ID="${{ secrets.SPOTIFY_CLIENT_ID }}"
-            export SPOTIFY_CLIENT_SECRET="${{ secrets.SPOTIFY_CLIENT_SECRET }}"
-            # leave empty to default to https://${{ env.DOMAIN }}/api/spotify/callback inside deploy.sh
-            export SPOTIFY_REDIRECT_URI=""
-            export SPOTIFY_REFRESH_TOKEN="${{ secrets.SPOTIFY_REFRESH_TOKEN }}"
-            export SPOTIFY_ACCESS_TOKEN="${{ secrets.SPOTIFY_ACCESS_TOKEN }}"
-            ENNVV
-            chmod 600 scripts/env.server || true
+          # Run the unified deploy AS ubuntu (login shell for PATH/npm etc.)
+          sudo -u "${DEPLOY_USER}" env HOME="/home/${DEPLOY_USER}" \
+            bash -lc "cd '${REPO_DIR}' && BRANCH='origin/${GITHUB_REF_NAME}' SHA='${GITHUB_SHA}' bash scripts/deploy.sh"
+          EOS
+          )
 
-            # Run the unified deploy script
-            bash scripts/deploy.sh
+          # Expand *secrets* into the script at send-time (not stored in repo)
+          REMOTE_SCRIPT="${REMOTE_SCRIPT//\$\{API_PORT\}/${{ secrets.API_PORT || '3000' }}}"
+          REMOTE_SCRIPT="${REMOTE_SCRIPT//\$\{SPOTIFY_CLIENT_ID\}/${{ secrets.SPOTIFY_CLIENT_ID }}}"
+          REMOTE_SCRIPT="${REMOTE_SCRIPT//\$\{SPOTIFY_CLIENT_SECRET\}/${{ secrets.SPOTIFY_CLIENT_SECRET }}}"
+          REMOTE_SCRIPT="${REMOTE_SCRIPT//\$\{SPOTIFY_REDIRECT_URI\}/${{ secrets.SPOTIFY_REDIRECT_URI || '' }}}"
+          REMOTE_SCRIPT="${REMOTE_SCRIPT//\$\{SPOTIFY_REFRESH_TOKEN\}/${{ secrets.SPOTIFY_REFRESH_TOKEN }}}"
+          REMOTE_SCRIPT="${REMOTE_SCRIPT//\$\{SPOTIFY_ACCESS_TOKEN\}/${{ secrets.SPOTIFY_ACCESS_TOKEN || '' }}}"
+
+          # Also substitute non-secret envs (so heredoc sees final values)
+          REMOTE_SCRIPT="${REMOTE_SCRIPT//\$\{DEPLOY_USER\}/${DEPLOY_USER}}"
+          REMOTE_SCRIPT="${REMOTE_SCRIPT//\$\{WEB_ROOT\}/${WEB_ROOT}}"
+          REMOTE_SCRIPT="${REMOTE_SCRIPT//\$\{SITE_ROOT\}/${SITE_ROOT}}"
+          REMOTE_SCRIPT="${REMOTE_SCRIPT//\$\{REPO_DIR\}/${REPO_DIR}}"
+          REMOTE_SCRIPT="${REMOTE_SCRIPT//\$\{CURRENT_API\}/${CURRENT_API}}"
+          REMOTE_SCRIPT="${REMOTE_SCRIPT//\$\{PM2_NAME\}/${PM2_NAME}}"
+          REMOTE_SCRIPT="${REMOTE_SCRIPT//\$\{DOMAIN\}/${DOMAIN}}"
+          REMOTE_SCRIPT="${REMOTE_SCRIPT//\$\{EMAIL\}/${EMAIL}}"
+          REMOTE_SCRIPT="${REMOTE_SCRIPT//\$\{GITHUB_SHA\}/${GITHUB_SHA}}"
+          REMOTE_SCRIPT="${REMOTE_SCRIPT//\$\{GITHUB_REF_NAME\}/${GITHUB_REF_NAME}}"
+
+          # Base64-encode to avoid AWS CLI --parameters parsing issues
+          B64=$(printf '%s' "$REMOTE_SCRIPT" | base64 -w0)
+
+          # Send as a single command that decodes and executes on the instance
+          CMD_ID=$(aws ssm send-command \
+            --instance-ids "${{ steps.ec2.outputs.id }}" \
+            --document-name "AWS-RunShellScript" \
+            --parameters '{"commands":["echo '"$B64"' | base64 -d | bash -euo pipefail"]}' \
+            --comment "Deploy dev ${GITHUB_SHA}" \
+            --query "Command.CommandId" --output text)
+
+          echo "cmd=$CMD_ID" >> "$GITHUB_OUTPUT"
+          echo "CommandId: $CMD_ID"
+
+      - name: Wait for completion
+        run: |
+          set -euo pipefail
+          CMD_ID="${{ steps.ssm.outputs.cmd }}"
+          IID="${{ steps.ec2.outputs.id }}"
+          while true; do
+            STATUS=$(aws ssm list-command-invocations --command-id "$CMD_ID" --details \
+              --query "CommandInvocations[0].Status" --output text)
+            echo "SSM status: $STATUS"
+            case "$STATUS" in
+              InProgress|Pending|Delayed) sleep 5 ;;
+              Success) break ;;
+              *) echo "Command failed: $STATUS"
+                 aws ssm get-command-invocation --command-id "$CMD_ID" --instance-id "$IID" || true
+                 exit 1 ;;
+            esac
+          done
+
+      - name: Fetch remote stdout/stderr
+        if: always()
+        run: |
+          aws ssm get-command-invocation \
+            --command-id "${{ steps.ssm.outputs.cmd }}" \
+            --instance-id "${{ steps.ec2.outputs.id }}" \
+            --query '{StdOut:StandardOutputContent,StdErr:StandardErrorContent}' \
+            --output text || true
