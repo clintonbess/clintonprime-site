@@ -51,8 +51,9 @@ jobs:
       - name: Send deploy via SSM
         id: ssm
         run: |
+          set -euo pipefail
           # Write env.server then run deploy.sh with exact commit
-          read -r -d '' REMOTE_SCRIPT <<'EOS'
+          read -r -d '' REMOTE_SCRIPT <<EOS
           set -euo pipefail
           sudo mkdir -p /opt/clintonprime-site/repo/scripts
           sudo tee /opt/clintonprime-site/repo/scripts/env.server >/dev/null <<ENVV
@@ -74,7 +75,7 @@ jobs:
           BRANCH="origin/${GITHUB_REF_NAME}" SHA="${GITHUB_SHA}" bash scripts/deploy.sh
           EOS
 
-          # Send SSM command
+          # Send SSM command (instance-id targeting)
           CMD_ID=$(aws ssm send-command \
             --instance-ids "${{ steps.ec2.outputs.id }}" \
             --document-name "AWS-RunShellScript" \
@@ -87,6 +88,7 @@ jobs:
 
       - name: Wait for completion
         run: |
+          set -euo pipefail
           CMD_ID="${{ steps.ssm.outputs.cmd }}"
           IID="${{ steps.ec2.outputs.id }}"
           while true; do
