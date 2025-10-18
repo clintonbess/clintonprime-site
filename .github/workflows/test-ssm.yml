@@ -13,8 +13,7 @@ concurrency:
   group: deploy-dev
   cancel-in-progress: true
 
-# These envs exist only in the workflow runner.
-# We will write them into env.server on the EC2 box before running deploy.sh.
+# These envs live on the runner; we write them into env.server on EC2.
 env:
   WEB_ROOT: /var/www/html/clintonprime
   CURRENT_API: /opt/clintonprime-site/current-api
@@ -52,9 +51,11 @@ jobs:
         id: ssm
         run: |
           set -euo pipefail
-          # Write env.server then run deploy.sh with exact commit
-          read -r -d '' REMOTE_SCRIPT <<EOS
+
+          # Build the remote script with vars expanded on the runner
+          REMOTE_SCRIPT=$(cat <<EOS
           set -euo pipefail
+
           sudo mkdir -p /opt/clintonprime-site/repo/scripts
           sudo tee /opt/clintonprime-site/repo/scripts/env.server >/dev/null <<ENVV
           REMOTE_USER=${DEPLOY_USER}
@@ -74,6 +75,7 @@ jobs:
           echo "[CI] kicking deploy for ${GITHUB_SHA} on branch ${GITHUB_REF_NAME}"
           BRANCH="origin/${GITHUB_REF_NAME}" SHA="${GITHUB_SHA}" bash scripts/deploy.sh
           EOS
+          )
 
           # Send SSM command (instance-id targeting)
           CMD_ID=$(aws ssm send-command \
