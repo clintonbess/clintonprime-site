@@ -47,7 +47,7 @@ jobs:
           echo "id=$IID" >> "$GITHUB_OUTPUT"
           echo "InstanceId: $IID"
 
-      - name: Send deploy via SSM
+      - name: Send deploy via SSM (base64 script)
         id: ssm
         run: |
           set -euo pipefail
@@ -77,11 +77,14 @@ jobs:
           EOS
           )
 
-          # Send SSM command (instance-id targeting)
+          # Encode script to avoid AWS CLI --parameters parsing issues
+          B64=$(printf '%s' "$REMOTE_SCRIPT" | base64 -w0)
+
+          # Send a single command that decodes and executes the script
           CMD_ID=$(aws ssm send-command \
             --instance-ids "${{ steps.ec2.outputs.id }}" \
             --document-name "AWS-RunShellScript" \
-            --parameters commands="$REMOTE_SCRIPT" \
+            --parameters '{"commands":["echo '"$B64"' | base64 -d | bash -euo pipefail"]}' \
             --comment "Deploy dev ${GITHUB_SHA}" \
             --query "Command.CommandId" --output text)
 
