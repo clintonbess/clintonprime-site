@@ -1,0 +1,112 @@
+name: Deploy (Dev) — OIDC + SSM
+
+on:
+  push:
+    branches: ["dev-deploy"]
+  workflow_dispatch:
+
+permissions:
+  id-token: write # OIDC
+  contents: read
+
+concurrency:
+  group: deploy-dev
+  cancel-in-progress: true
+
+# These envs exist only in the workflow runner.
+# We will write them into env.server on the EC2 box before running deploy.sh.
+env:
+  WEB_ROOT: /var/www/html/clintonprime
+  CURRENT_API: /opt/clintonprime-site/current-api
+  PM2_NAME: clintonprime-api-dev
+  DOMAIN: dev.clintonprime.com
+  EMAIL: clintonbess3@gmail.com
+  DEPLOY_USER: ubuntu
+  RELEASES_DIR: /opt/clintonprime-site/releases
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: dev
+    steps:
+      - name: Configure AWS (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Who am I?
+        run: aws sts get-caller-identity
+
+      - name: Find EC2 instance by tag (Name=clintonprime-dev)
+        id: ec2
+        run: |
+          IID=$(aws ec2 describe-instances \
+            --filters "Name=tag:Name,Values=clintonprime-dev" "Name=instance-state-name,Values=running" \
+            --query "Reservations[].Instances[].InstanceId" --output text)
+          [ -n "$IID" ] || { echo "No instance found"; exit 1; }
+          echo "id=$IID" >> "$GITHUB_OUTPUT"
+          echo "InstanceId: $IID"
+
+      - name: Send deploy via SSM
+        id: ssm
+        run: |
+          # Write env.server then run deploy.sh with exact commit
+          read -r -d '' REMOTE_SCRIPT <<'EOS'
+          set -euo pipefail
+          sudo mkdir -p /opt/clintonprime-site/repo/scripts
+          sudo tee /opt/clintonprime-site/repo/scripts/env.server >/dev/null <<ENVV
+          REMOTE_USER=${DEPLOY_USER}
+          WEB_ROOT=${WEB_ROOT}
+          SITE_ROOT=$(dirname ${WEB_ROOT})
+          REPO_DIR=/opt/clintonprime-site/repo
+          PM2_NAME=${PM2_NAME}
+          REPO_URL=git@github.com:clintonbess/clintonprime-site.git
+          DOMAIN=${DOMAIN}
+          EMAIL=${EMAIL}
+          CURRENT_API=${CURRENT_API}
+          RELEASES_DIR=${RELEASES_DIR}
+          ENVV
+          sudo chown -R ${DEPLOY_USER}:${DEPLOY_USER} /opt/clintonprime-site
+
+          cd /opt/clintonprime-site/repo
+          echo "[CI] kicking deploy for ${GITHUB_SHA} on branch ${GITHUB_REF_NAME}"
+          BRANCH="origin/${GITHUB_REF_NAME}" SHA="${GITHUB_SHA}" bash scripts/deploy.sh
+          EOS
+
+          # Send SSM command
+          CMD_ID=$(aws ssm send-command \
+            --instance-ids "${{ steps.ec2.outputs.id }}" \
+            --document-name "AWS-RunShellScript" \
+            --parameters commands="$REMOTE_SCRIPT" \
+            --comment "Deploy dev ${GITHUB_SHA}" \
+            --query "Command.CommandId" --output text)
+
+          echo "cmd=$CMD_ID" >> "$GITHUB_OUTPUT"
+          echo "CommandId: $CMD_ID"
+
+      - name: Wait for completion
+        run: |
+          CMD_ID="${{ steps.ssm.outputs.cmd }}"
+          IID="${{ steps.ec2.outputs.id }}"
+          while true; do
+            STATUS=$(aws ssm list-command-invocations --command-id "$CMD_ID" --details \
+              --query "CommandInvocations[0].Status" --output text)
+            echo "SSM status: $STATUS"
+            case "$STATUS" in
+              InProgress|Pending|Delayed) sleep 5 ;;
+              Success) break ;;
+              *) echo "Command failed: $STATUS"
+                 aws ssm get-command-invocation --command-id "$CMD_ID" --instance-id "$IID" || true
+                 exit 1 ;;
+            esac
+          done
+
+      - name: Fetch remote stdout/stderr
+        if: always()
+        run: |
+          aws ssm get-command-invocation \
+            --command-id "${{ steps.ssm.outputs.cmd }}" \
+            --instance-id "${{ steps.ec2.outputs.id }}" \
+            --query '{StdOut:StandardOutputContent,StdErr:StandardErrorContent}' \
+            --output text || true
