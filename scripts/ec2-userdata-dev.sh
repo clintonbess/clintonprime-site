@@ -12,10 +12,10 @@ grep -q '/swapfile ' /etc/fstab || echo '/swapfile none swap sw 0 0' >> /etc/fst
 apt-get update -y
 apt-get install -y nginx git curl rsync build-essential ca-certificates
 
-# ── Node 20 + pnpm + pm2 ────────────────────────────────────────────
+# ── Node 20 + pnpm + pm2 + typescript ───────────────────────────────
 curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
 apt-get install -y nodejs
-npm i -g pnpm@9 pm2
+npm i -g pnpm@9 pm2 typescript@5
 pm2 startup systemd -u ubuntu --hp /home/ubuntu --silent || true
 
 # ── folders ─────────────────────────────────────────────────────────

@@ -152,6 +152,30 @@ ENVV
 fi
 ok "api env ready @ $ENV_FILE"
 
+
+# ------------------- API DEPLOY ARTIFACTS -------------------
+log "deploy api dist → $CURRENT_API/dist and write .env"
+mkdir -p "$CURRENT_API/dist"
+rsync -a --delete "$REPO_DIR/libs/api/dist/" "$CURRENT_API/dist/"
+
+ENV_OUT="$CURRENT_API/dist/.env"
+# Use DOMAIN when SPOTIFY_REDIRECT_URI is not provided
+: "${API_PORT:=3000}"
+: "${SPOTIFY_REDIRECT_URI:="https://${DOMAIN}/api/spotify/callback"}"
+
+cat > "$ENV_OUT" <<ENVV
+PORT=${API_PORT}
+SPOTIFY_CLIENT_ID=${SPOTIFY_CLIENT_ID}
+SPOTIFY_CLIENT_SECRET=${SPOTIFY_CLIENT_SECRET}
+SPOTIFY_REDIRECT_URI=${SPOTIFY_REDIRECT_URI}
+# optional at first boot; will be filled after login flow
+SPOTIFY_REFRESH_TOKEN=${SPOTIFY_REFRESH_TOKEN}
+SPOTIFY_ACCESS_TOKEN=${SPOTIFY_ACCESS_TOKEN}
+ENVV
+
+chmod 600 "$ENV_OUT" || true
+ok "api env written @ $ENV_OUT"
+
 # ------------------- SMOKE TEST -------------------
 log "smoke test API (workspace-aware)"
 ( cd "$REPO_DIR" && PORT=3000 NODE_ENV=development pnpm --filter @clintonprime/api exec node dist/index.js & echo $! > /tmp/cp-test.pid )

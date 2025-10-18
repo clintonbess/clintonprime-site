@@ -12,6 +12,7 @@ concurrency:
 env:
   WEB_ROOT: /var/www/html/clintonprime
   CURRENT_API: /opt/clintonprime-site/current-api
+  SITE_ROOT: /opt/clintonprime-site
   PM2_NAME: clintonprime-api-dev
   DOMAIN: dev.clintonprime.com
   EMAIL: clintonbess3@gmail.com
@@ -88,11 +89,28 @@ jobs:
             git checkout -q "${{ github.sha }}"
             chmod +x scripts/*.sh || true
 
-            REPO_URL="https://github.com/${{ github.repository }}" \
-            REPO_DIR="$REPO_DIR" \
-            WEB_ROOT="${{ env.WEB_ROOT }}" \
-            CURRENT_API="${{ env.CURRENT_API }}" \
-            PM2_NAME="${{ env.PM2_NAME }}" \
-            SHA="${{ github.sha }}" \
-            REMOTE_USER="${{ env.REMOTE_USER }}" \
-            bash scripts/deploy-dev.sh
+            # Render env.server with secrets and deployment settings
+            cat > scripts/env.server <<'ENVV'
+            export REMOTE_USER="${{ env.REMOTE_USER }}"
+            export WEB_ROOT="${{ env.WEB_ROOT }}"
+            export SITE_ROOT="${{ env.SITE_ROOT }}"
+            export REPO_DIR="${{ env.REPO_DIR }}"
+            export CURRENT_API="${{ env.CURRENT_API }}"
+            export PM2_NAME="${{ env.PM2_NAME }}"
+            export REPO_URL="https://github.com/${{ github.repository }}"
+            export BRANCH=""            # using exact SHA for this workflow
+            export SHA="${{ github.sha }}"
+
+            # API runtime env
+            export API_PORT="${{ secrets.API_PORT || '3000' }}"
+            export SPOTIFY_CLIENT_ID="${{ secrets.SPOTIFY_CLIENT_ID }}"
+            export SPOTIFY_CLIENT_SECRET="${{ secrets.SPOTIFY_CLIENT_SECRET }}"
+            # leave empty to default to https://${{ env.DOMAIN }}/api/spotify/callback inside deploy.sh
+            export SPOTIFY_REDIRECT_URI=""
+            export SPOTIFY_REFRESH_TOKEN="${{ secrets.SPOTIFY_REFRESH_TOKEN }}"
+            export SPOTIFY_ACCESS_TOKEN="${{ secrets.SPOTIFY_ACCESS_TOKEN }}"
+            ENNVV
+            chmod 600 scripts/env.server || true
+
+            # Run the unified deploy script
+            bash scripts/deploy.sh
