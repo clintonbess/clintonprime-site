@@ -1,10 +1,10 @@
-name: Test: OIDC + SSM
+name: Test - OIDC + SSM
 
 on:
   workflow_dispatch: {}
 
 permissions:
-  id-token: write     # needed for OIDC
+  id-token: write # needed for OIDC
   contents: read
 
 jobs:
