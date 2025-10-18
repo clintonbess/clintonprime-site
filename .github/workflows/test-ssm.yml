@@ -1,4 +1,4 @@
-name: Test - OIDC + SSM
+name: Testing - OIDC + SSM
 
 on:
   workflow_dispatch: {}
