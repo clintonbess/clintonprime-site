@@ -13,7 +13,6 @@ concurrency:
   group: deploy-dev
   cancel-in-progress: true
 
-# These envs live on the runner; we write them into env.server on EC2.
 env:
   WEB_ROOT: /var/www/html/clintonprime
   CURRENT_API: /opt/clintonprime-site/current-api
@@ -47,7 +46,7 @@ jobs:
           echo "id=$IID" >> "$GITHUB_OUTPUT"
           echo "InstanceId: $IID"
 
-      - name: Send deploy via SSM (base64 script)
+      - name: Send deploy via SSM (base64 script; run as ubuntu)
         id: ssm
         run: |
           set -euo pipefail
@@ -56,7 +55,15 @@ jobs:
           REMOTE_SCRIPT=$(cat <<EOS
           set -euo pipefail
 
+          # Ensure paths and ownership
           sudo mkdir -p /opt/clintonprime-site/repo/scripts
+          sudo chown -R ${DEPLOY_USER}:${DEPLOY_USER} /opt/clintonprime-site
+
+          # Mark repo as safe for both root (SSM) and ubuntu (actual deploy user)
+          sudo git config --system --add safe.directory /opt/clintonprime-site/repo || true
+          sudo -u ${DEPLOY_USER} git config --global --add safe.directory /opt/clintonprime-site/repo || true
+
+          # Write env.server
           sudo tee /opt/clintonprime-site/repo/scripts/env.server >/dev/null <<ENVV
           REMOTE_USER=${DEPLOY_USER}
           WEB_ROOT=${WEB_ROOT}
@@ -71,9 +78,12 @@ jobs:
           ENVV
           sudo chown -R ${DEPLOY_USER}:${DEPLOY_USER} /opt/clintonprime-site
 
-          cd /opt/clintonprime-site/repo
+          # Run deploy AS ubuntu with a clean login shell (PATH, npm/pnpm, git config etc.)
           echo "[CI] kicking deploy for ${GITHUB_SHA} on branch ${GITHUB_REF_NAME}"
-          BRANCH="origin/${GITHUB_REF_NAME}" SHA="${GITHUB_SHA}" bash scripts/deploy.sh
+          sudo -u ${DEPLOY_USER} env HOME=/home/${DEPLOY_USER} bash -lc '
+            cd /opt/clintonprime-site/repo
+            BRANCH="origin/${GITHUB_REF_NAME}" SHA="${GITHUB_SHA}" bash scripts/deploy.sh
+          '
           EOS
           )
 
